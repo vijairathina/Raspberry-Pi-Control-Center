@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Application Logs - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Application Event Logs{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Flask Application System Logs</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Dedicated audit events, daemon exceptions, and runtime trace stream. Passwords are redacted.</span>
+  </div>
+
+  <div style="display: flex; gap: 0.5rem;">
+    <select id="log-level-filter" class="form-control-rpi" style="width: 140px;" onchange="loadAppLogs()">
+      <option value="">All Levels</option>
+      <option value="INFO">INFO Only</option>
+      <option value="WARNING">WARNING Only</option>
+      <option value="ERROR">ERROR / CRIT</option>
+    </select>
+    <button class="btn-secondary" onclick="loadAppLogs()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+    <button class="btn-secondary btn-danger-soft" onclick="clearAppLogs()"><i class="bi bi-trash"></i> Truncate Log</button>
+  </div>
+</div>
+
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <span class="card-title-sm"><i class="bi bi-file-earmark-code"></i> data/app.log Event Stream</span>
+  </div>
+  <div class="terminal-window" id="app-log-terminal">{{ initial_logs }}</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function loadAppLogs() {
+    const level = document.getElementById('log-level-filter').value;
+    const term = document.getElementById('app-log-terminal');
+    try {
+      const res = await RPi.fetchApi(`/api/logs/app?level=${encodeURIComponent(level)}&lines=150`);
+      term.textContent = res.data || "No log entries found.";
+      term.scrollTop = term.scrollHeight;
+    } catch (e) {
+      term.textContent = "Error reading log stream: " + e.message;
+    }
+  }
+
+  function clearAppLogs() {
+    RPi.confirmAction("Clear Application Logs", "Are you sure you want to truncate the application log file?", async () => {
+      try {
+        const res = await RPi.fetchApi('/api/logs/clear', { method: 'POST' });
+        RPi.showToast(res.message, 'success');
+        loadAppLogs();
+      } catch (e) {}
+    });
+  }
+</script>
+{% endblock %}

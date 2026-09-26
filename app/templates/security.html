@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Security - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Security & Administrative Audit Logs{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Access Security & Administrative Audit Trail</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Inspect tamper-evident administrative action logs, verify CSRF session security, and update admin credentials.</span>
+  </div>
+</div>
+
+<!-- Two-Column Layout: Security Profile & Credential Update -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+  <!-- Security Posture Card -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-shield-lock-fill"></i> System Security Posture</h4>
+      <span class="badge-status badge-normal">Hardened</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; font-size: 0.85rem;">
+      <div style="display: flex; justify-content: space-between; padding: 0.6rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary);">Brute-force Rate Limiting:</span>
+        <strong style="color: var(--status-normal);">5 attempts / 60s per IP</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 0.6rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary);">CSRF Token Validation:</span>
+        <strong style="color: var(--status-normal);">Active on all POST/DELETE endpoints</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 0.6rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary);">Password Hashing:</span>
+        <strong style="color: var(--status-info);">Werkzeug PBKDF2:SHA256</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 0.6rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary);">Arbitrary Shell Execution:</span>
+        <strong style="color: var(--status-normal);">Strictly Forbidden (Allowlist Only)</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Password Card -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-key-fill"></i> Change Administrator Password</h4>
+    </div>
+    <div style="margin-top: 0.85rem;">
+      <div style="margin-bottom: 0.85rem;">
+        <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Current Password</label>
+        <input type="password" id="cur-pass-input" class="form-control-rpi" placeholder="••••••••">
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">New Secure Password (Min 6 chars)</label>
+        <input type="password" id="new-pass-input" class="form-control-rpi" placeholder="••••••••">
+      </div>
+      <button class="btn-rpi" style="width: 100%; justify-content: center;" onclick="updatePassword()">
+        <i class="bi bi-check2-circle"></i> Save New Password
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Audit Log Table -->
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-clock-history"></i> Administrative Action Audit Log</h4>
+    <div style="display: flex; gap: 0.5rem;">
+      <input type="text" id="audit-search-input" class="form-control-rpi" placeholder="Search actions..." style="width: 220px;" oninput="filterAuditLogs()">
+    </div>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Details & Parameters</th>
+          <th>Client IP</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="audit-tbody">
+        {% if audit_logs %}
+          {% for log in audit_logs %}
+          <tr>
+            <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">{{ log.timestamp }}</td>
+            <td><strong>{{ log.username }}</strong></td>
+            <td>{{ log.action }}</td>
+            <td style="color: var(--text-secondary); font-size: 0.82rem; max-width: 340px;">{{ log.details }}</td>
+            <td style="font-family: monospace; font-size: 0.8rem;">{{ log.ip_address }}</td>
+            <td>
+              {% if log.success %}
+                <span class="badge-status badge-normal" style="font-size: 0.72rem;">Success</span>
+              {% else %}
+                <span class="badge-status badge-critical" style="font-size: 0.72rem;">Failed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No audit records available.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function updatePassword() {
+    const current_password = document.getElementById('cur-pass-input').value;
+    const new_password = document.getElementById('new-pass-input').value;
+
+    if (!current_password || !new_password) {
+      RPi.showToast("Both current and new passwords are required", "error");
+      return;
+    }
+
+    try {
+      const res = await RPi.fetchApi('/api/auth/change-password', {
+        method: 'POST',
+        body: { current_password, new_password }
+      });
+      RPi.showToast(res.message, 'success');
+      document.getElementById('cur-pass-input').value = '';
+      document.getElementById('new-pass-input').value = '';
+    } catch (e) {}
+  }
+
+  async function filterAuditLogs() {
+    const q = document.getElementById('audit-search-input').value.trim();
+    try {
+      const res = await RPi.fetchApi(`/api/security/audit-logs?q=${encodeURIComponent(q)}&limit=100`);
+      if (!res.success) return;
+      const tbody = document.getElementById('audit-tbody');
+      tbody.innerHTML = res.data.map(l => `
+        <tr>
+          <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">${l.timestamp}</td>
+          <td><strong>${l.username}</strong></td>
+          <td>${l.action}</td>
+          <td style="color: var(--text-secondary); font-size: 0.82rem; max-width: 340px;">${l.details || ''}</td>
+          <td style="font-family: monospace; font-size: 0.8rem;">${l.ip_address}</td>
+          <td>
+            <span class="badge-status badge-${l.success ? 'normal' : 'critical'}" style="font-size: 0.72rem;">
+              ${l.success ? 'Success' : 'Failed'}
+            </span>
+          </td>
+        </tr>
+      `).join('');
+    } catch (e) {}
+  }
+</script>
+{% endblock %}

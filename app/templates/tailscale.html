@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Tailscale - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Tailscale Mesh VPN{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Zero-Config WireGuard Mesh VPN</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Inspect 100.x.y.z overlay network, MagicDNS hostname, and active remote tailnet peers.</span>
+  </div>
+
+  <div style="display: flex; gap: 0.5rem;">
+    {% if tailscale.running %}
+      <button class="btn-secondary btn-sm" onclick="controlTailscale('restart')"><i class="bi bi-arrow-repeat"></i> Restart</button>
+      <button class="btn-secondary btn-sm btn-danger-soft" onclick="controlTailscale('down')"><i class="bi bi-stop-circle"></i> Disconnect</button>
+    {% else %}
+      <button class="btn-rpi btn-sm" onclick="controlTailscale('up')"><i class="bi bi-play-circle"></i> Connect Mesh</button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Tailscale Overview Cards -->
+<div class="dashboard-grid" style="margin-bottom: 1.5rem;">
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Backend Daemon</span>
+      <span class="badge-status {% if tailscale.running %}badge-normal{% else %}badge-critical{% endif %}">
+        {{ tailscale.state }}
+      </span>
+    </div>
+    <div class="card-value">{{ 'Online' if tailscale.running else 'Stopped' }}</div>
+    <div class="card-meta">WireGuard encrypted tunnel</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Tailscale IPv4</span>
+      <span class="badge-status badge-info">100.x CGNAT</span>
+    </div>
+    <div class="card-value" style="font-size: 1.35rem; color: var(--status-info);">{{ tailscale.ip }}</div>
+    <div class="card-meta">Internal mesh node address</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">MagicDNS Hostname</span>
+      <span class="badge-status badge-normal">Active</span>
+    </div>
+    <div class="card-value" style="font-size: 1.15rem;">{{ tailscale.hostname }}</div>
+    <div class="card-meta">Resolvable across entire tailnet</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Tailnet Peers</span>
+      <span class="badge-status badge-info">{{ tailscale.peers|length }} Connected</span>
+    </div>
+    <div class="card-value">{{ tailscale.peers|length }}</div>
+    <div class="card-meta">Mesh nodes authenticated</div>
+  </div>
+</div>
+
+<!-- Tailnet Connected Peers Table -->
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-diagram-3"></i> Authenticated Mesh Peers</h4>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Peer Hostname</th>
+          <th>Tailscale IP</th>
+          <th>Operating System</th>
+          <th>Connectivity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if tailscale.peers %}
+          {% for p in tailscale.peers %}
+          <tr>
+            <td><strong>{{ p.hostname }}</strong></td>
+            <td style="font-family: monospace; color: var(--status-info);">{{ p.ip }}</td>
+            <td style="color: var(--text-secondary);">{{ p.os }}</td>
+            <td>
+              {% if p.online %}
+                <span class="badge-status badge-normal">Direct / Online</span>
+              {% else %}
+                <span class="badge-status badge-warning">Idle / Offline</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No remote peers connected.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function controlTailscale(action) {
+    RPi.showToast(`Executing Tailscale ${action}...`, 'info');
+    try {
+      const res = await RPi.fetchApi('/api/tailscale/control', {
+        method: 'POST',
+        body: { action }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {}
+  }
+</script>
+{% endblock %}

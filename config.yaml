@@ -1,0 +1,41 @@
+server:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  secret_key: "rpi-control-center-secret-change-in-prod"
+  session_lifetime_minutes: 1440
+
+database:
+  path: "data/rpi_control.db"
+
+defaults:
+  admin_username: "admin"
+  admin_default_password: "admin" # Forced to change or pre-hashed on first run
+  theme: "dark"
+  polling_interval_seconds: 3
+  temperature_warning_celsius: 70
+  temperature_critical_celsius: 80
+  cpu_warning_percent: 85
+  cpu_critical_percent: 95
+  ram_warning_percent: 85
+  ram_critical_percent: 95
+  disk_warning_percent: 75
+  disk_critical_percent: 90
+
+home_assistant:
+  enabled: false
+  base_url: "http://homeassistant.local:8123"
+  access_token: "" # HA Long-Lived Access Token
+  notify_service: "notify" # e.g. notify or persistent_notification
+  send_alerts: true
+  sensor_entity_id: "sensor.rpi_internet_status"
+
+internet_monitor:
+  enabled: true
+  interval_seconds: 60
+  ping_hosts:
+    - "8.8.8.8"
+    - "1.1.1.1"
+  timeout_seconds: 2
+  retry_on_timeout: 3 # If fails, retry up to 3 times; if 1 succeeds, it is online
+  send_to_ha: true

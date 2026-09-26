@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Hardware & GPIO - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Hardware Devices & GPIO Header{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Peripheral Bus & 40-Pin Header</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Hardware inventory, safe digital GPIO pin state toggle, camera sensor stream, and USB peripherals.</span>
+  </div>
+</div>
+
+<!-- Two Column Layout: Hardware Overview & Camera Feed -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+  <!-- USB & System Peripherals -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-usb-symbol"></i> Attached USB Peripherals (lsusb)</h4>
+      <span class="badge-status badge-info">{{ overview.usb_devices|length }} Connected</span>
+    </div>
+    
+    <div class="rpi-table-container" style="border: none; margin-top: 0.75rem;">
+      <table class="rpi-table">
+        <thead>
+          <tr>
+            <th>Product Description</th>
+            <th>ID</th>
+            <th>Bus/Dev</th>
+            <th>State</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in overview.usb_devices %}
+          <tr>
+            <td><strong>{{ u.product }}</strong></td>
+            <td style="font-family: monospace; color: var(--text-secondary);">{{ u.id }}</td>
+            <td style="color: var(--text-muted);">Bus {{ u.bus }} Dev {{ u.device }}</td>
+            <td><span class="badge-status badge-normal">{{ u.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bus Interfaces (I2C, SPI, Serial) -->
+    <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-color); font-size: 0.82rem;">
+      <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary);">Embedded Bus Interfaces:</div>
+      <div style="display: flex; gap: 1.5rem;">
+        <div>I2C Bus: <strong style="color: var(--status-normal);">{{ 'Enabled' if overview.bus_interfaces.i2c_enabled else 'Active' }}</strong></div>
+        <div>SPI Bus: <strong style="color: var(--status-normal);">{{ 'Enabled' if overview.bus_interfaces.spi_enabled else 'Active' }}</strong></div>
+        <div>UART / Serial: <strong style="color: var(--status-info);">{{ overview.serial_ports|first }}</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera Sensor Module -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-camera-video"></i> Camera Sensor (CSI / V4L2)</h4>
+      <span class="badge-status {% if camera.detected %}badge-normal{% else %}badge-warning{% endif %}">
+        {{ camera.status }}
+      </span>
+    </div>
+
+    <div style="margin-top: 0.75rem; font-size: 0.85rem;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+        <span style="color: var(--text-secondary);">Sensor Name:</span>
+        <strong>{{ camera.name }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+        <span style="color: var(--text-secondary);">Resolution:</span>
+        <strong>{{ camera.resolution }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+        <span style="color: var(--text-secondary);">Hardware Interface:</span>
+        <strong>{{ camera.interface }}</strong>
+      </div>
+    </div>
+
+    <div style="text-align: center; background: rgba(0,0,0,0.4); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
+      <img id="camera-preview-img" src="" alt="Camera Preview" style="width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px;">
+    </div>
+
+    <button class="btn-rpi" style="width: 100%; justify-content: center;" onclick="refreshCameraPreview()">
+      <i class="bi bi-camera"></i> Capture New Frame
+    </button>
+  </div>
+</div>
+
+<!-- 40-Pin GPIO Header Interactive Controller -->
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <div>
+      <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-cpu-fill"></i> 40-Pin GPIO Header Controller</h4>
+      <span style="font-size: 0.78rem; color: var(--text-muted);">Configure safe digital GPIO pins as Input or Output. Power & ground pins are protected.</span>
+    </div>
+  </div>
+
+  <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); color: #fbbf24; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.82rem; margin: 1rem 0;">
+    <i class="bi bi-shield-exclamation"></i> <strong>Safety Protection:</strong> Never connect 5V directly to a 3.3V GPIO input pin to prevent hardware damage. Outputs can drive LEDs, relays, and transistors safely.
+  </div>
+
+  <div class="rpi-table-container" style="border: none;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Physical Pin</th>
+          <th>Pin Name / Type</th>
+          <th>BCM GPIO</th>
+          <th>Mode</th>
+          <th>Logic State</th>
+          <th>Controls</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pins %}
+        <tr>
+          <td style="font-weight: 700; color: var(--status-info);">Pin {{ p.pin }}</td>
+          <td>
+            <strong>{{ p.name }}</strong>
+            {% if not p.safe %}
+              <span style="font-size: 0.68rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 5px; border-radius: 4px; margin-left: 5px;">Protected</span>
+            {% endif %}
+          </td>
+          <td>{{ 'GPIO ' ~ p.gpio if p.gpio is not none else '—' }}</td>
+          <td>
+            <span class="badge-status {% if p.mode == 'OUT' %}badge-normal{% elif p.mode == 'IN' %}badge-info{% else %}badge-warning{% endif %}">
+              {{ p.mode }}
+            </span>
+          </td>
+          <td>
+            {% if p.state == 1 %}
+              <span style="color: #22c55e; font-weight: 600;">● HIGH (1)</span>
+            {% else %}
+              <span style="color: var(--text-muted); font-weight: 600;">○ LOW (0)</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.safe %}
+              <div style="display: flex; gap: 0.4rem;">
+                {% if p.mode == 'OUT' %}
+                  {% if p.state == 1 %}
+                    <button class="btn-secondary btn-sm btn-danger-soft" onclick="toggleGPIOState({{ p.gpio }}, 0)">Set LOW</button>
+                  {% else %}
+                    <button class="btn-secondary btn-sm btn-success-soft" onclick="toggleGPIOState({{ p.gpio }}, 1)">Set HIGH</button>
+                  {% endif %}
+                  <button class="btn-secondary btn-sm" onclick="setGPIOMode({{ p.gpio }}, 'IN')">Make IN</button>
+                {% else %}
+                  <button class="btn-secondary btn-sm" onclick="setGPIOMode({{ p.gpio }}, 'OUT')">Make OUT</button>
+                {% endif %}
+              </div>
+            {% else %}
+              <span style="font-size: 0.78rem; color: var(--text-muted);">Fixed Bus/VCC</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function refreshCameraPreview() {
+    RPi.showToast("Querying camera frame...", "info");
+    try {
+      const res = await RPi.fetchApi('/api/hardware/camera/preview');
+      if (res.success && res.data_url) {
+        document.getElementById('camera-preview-img').src = res.data_url;
+      }
+    } catch (e) {}
+  }
+
+  async function setGPIOMode(gpio, mode) {
+    try {
+      const res = await RPi.fetchApi('/api/hardware/gpio/mode', {
+        method: 'POST',
+        body: { gpio, mode }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {}
+  }
+
+  async function toggleGPIOState(gpio, state) {
+    try {
+      const res = await RPi.fetchApi('/api/hardware/gpio/state', {
+        method: 'POST',
+        body: { gpio, state }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {}
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshCameraPreview();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Network - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Network Interfaces & LAN Security{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Physical & Virtual Interfaces</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Manage IP leases, link states, and execute fail-safe temporary network blocks with automatic rollback.</span>
+  </div>
+
+  <div>
+    <span class="badge-status badge-info">Current Browser Client: {{ client_ip }}</span>
+  </div>
+</div>
+
+<!-- Interfaces Table -->
+<div class="rpi-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-ethernet"></i> Network Interface Adapter Cards</h4>
+  </div>
+
+  <div class="rpi-table-container" style="border: none;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Interface</th>
+          <th>State</th>
+          <th>IPv4 Address</th>
+          <th>MAC Hardware</th>
+          <th>Speed & MTU</th>
+          <th>Traffic (RX / TX)</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for iface in interfaces %}
+        <tr>
+          <td>
+            <strong>{{ iface.name }}</strong>
+            {% if iface.is_temp_blocked %}
+              <div style="font-size: 0.72rem; color: #f59e0b; margin-top: 3px;">
+                <i class="bi bi-stopwatch"></i> Blocked ({{ iface.remaining_block_seconds }}s left)
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            {% if iface.is_up %}
+              <span class="badge-status badge-normal">UP</span>
+            {% else %}
+              <span class="badge-status badge-critical">DOWN</span>
+            {% endif %}
+          </td>
+          <td style="font-family: monospace; color: var(--status-info);">{{ iface.ip }}</td>
+          <td style="font-family: monospace; color: var(--text-secondary);">{{ iface.mac }}</td>
+          <td>{{ iface.speed_mbps }} Mbps (MTU {{ iface.mtu }})</td>
+          <td style="color: var(--text-secondary);">{{ iface.rx_mb }} MB / {{ iface.tx_mb }} MB</td>
+          <td>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              {% if iface.is_temp_blocked %}
+                <button class="btn-rpi btn-sm" onclick="restoreBlock('{{ iface.name }}')">Restore Now</button>
+              {% else %}
+                {% if iface.is_up %}
+                  <button class="btn-secondary btn-sm btn-danger-soft" onclick="promptTempBlock('{{ iface.name }}', {{ 'true' if iface.is_current_client else 'false' }})">Temp Block</button>
+                  <button class="btn-secondary btn-sm" onclick="setInterfaceState('{{ iface.name }}', 'down')">Down</button>
+                {% else %}
+                  <button class="btn-secondary btn-sm btn-success-soft" onclick="setInterfaceState('{{ iface.name }}', 'up')">Up</button>
+                {% endif %}
+                <button class="btn-secondary btn-sm" onclick="renewDhcp('{{ iface.name }}')" title="Renew DHCP Lease">Renew</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Two-Column Grid: Listening Ports & Firewall Overview -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 1.5rem;">
+  <!-- Listening Ports Card -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-door-open"></i> Local Listening Ports & Daemons</h4>
+      <span class="badge-status badge-info">{{ ports|length }} Ports</span>
+    </div>
+    <div class="rpi-table-container" style="border: none; margin-top: 1rem; max-height: 380px; overflow-y: auto;">
+      <table class="rpi-table">
+        <thead>
+          <tr>
+            <th>Port</th>
+            <th>Proto</th>
+            <th>Service / Process</th>
+            <th>Binding Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in ports %}
+          <tr>
+            <td style="font-weight: 700; color: var(--status-info);">{{ p.port }}</td>
+            <td><span class="badge-status badge-info" style="font-size:0.65rem;">{{ p.protocol }}</span></td>
+            <td>
+              <strong>{{ p.service_label or p.process }}</strong>
+              <div style="font-size: 0.72rem; color: var(--text-muted);">PID {{ p.pid }}</div>
+            </td>
+            <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">{{ p.address }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Firewall Status Card -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-shield-shaded"></i> Linux Firewall (Packet Filter)</h4>
+      <span class="badge-status {% if firewall.enabled %}badge-normal{% else %}badge-warning{% endif %}">
+        {{ 'Active' if firewall.enabled else 'Inactive' }}
+      </span>
+    </div>
+    
+    <div style="font-size: 0.85rem; margin-top: 1rem;">
+      <div style="display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border-color);">
+        <span style="color: var(--text-secondary);">Firewall Engine:</span>
+        <strong>{{ firewall.type }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border-color);">
+        <span style="color: var(--text-secondary);">Default Packet Policy:</span>
+        <strong style="color: var(--status-info);">{{ firewall.default_policy }}</strong>
+      </div>
+    </div>
+
+    <div style="margin-top: 1.2rem;">
+      <span class="card-meta">Active Rules Summary:</span>
+      <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.85rem; font-family: monospace; font-size: 0.78rem; color: #38bdf8; margin-top: 0.5rem; max-height: 180px; overflow-y: auto;">
+        {% if firewall.rules %}
+          {% for r in firewall.rules %}
+            <div>{{ r }}</div>
+          {% endfor %}
+        {% else %}
+          <div style="color: var(--text-muted);">No restrictive firewall rules configured.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Temporary Network Block Modal with Fail-Safe Rollback -->
+<div id="temp-block-modal" class="modal-backdrop-custom">
+  <div class="modal-dialog-custom">
+    <h3 style="margin-top: 0; font-size: 1.15rem; color: var(--status-critical);"><i class="bi bi-exclamation-triangle-fill"></i> Temporary Network Block</h3>
+    <div id="temp-block-warning" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.85rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem;">
+      <strong>CAUTION:</strong> You may lose browser access to this Raspberry Pi if you disable the active management interface.
+      The network restoration task is guaranteed to execute via hardware timer even if Flask or the browser disconnects.
+    </div>
+
+    <p style="font-size: 0.9rem;">Interface to block: <strong id="block-iface-name" style="color:var(--text-primary);"></strong></p>
+
+    <div style="margin: 1.25rem 0;">
+      <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Block Duration (Auto-restore after):</label>
+      <select id="block-duration-select" class="form-control-rpi">
+        <option value="5">5 Minutes</option>
+        <option value="10" selected>10 Minutes</option>
+        <option value="30">30 Minutes</option>
+        <option value="60">1 Hour</option>
+      </select>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn-secondary" onclick="document.getElementById('temp-block-modal').classList.remove('active')">Cancel</button>
+      <button class="btn-rpi" style="background: var(--status-critical);" id="block-confirm-btn">Schedule Rollback & Disable</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let targetBlockIface = '';
+
+  function promptTempBlock(iface, isCurrent) {
+    targetBlockIface = iface;
+    document.getElementById('block-iface-name').textContent = iface;
+    const warning = document.getElementById('temp-block-warning');
+    if (isCurrent) {
+      warning.innerHTML = `<strong>DANGER:</strong> You are currently connected through <strong>${iface}</strong>. Disabling this interface will disconnect this web browser immediately until the restoration timer fires!`;
+    } else {
+      warning.innerHTML = `An automated independent restoration task will be scheduled <strong>BEFORE</strong> disabling ${iface} to guarantee no permanent lockout can occur.`;
+    }
+
+    const modal = document.getElementById('temp-block-modal');
+    modal.classList.add('active');
+
+    document.getElementById('block-confirm-btn').onclick = async () => {
+      const duration = document.getElementById('block-duration-select').value;
+      modal.classList.remove('active');
+      RPi.showToast(`Scheduling rollback and disabling ${targetBlockIface}...`, 'warning');
+      try {
+        const res = await RPi.fetchApi('/api/network/temporary-block', {
+          method: 'POST',
+          body: { interface: targetBlockIface, duration_minutes: duration }
+        });
+        RPi.showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 1500);
+      } catch (e) {}
+    };
+  }
+
+  async function restoreBlock(iface) {
+    try {
+      const res = await RPi.fetchApi('/api/network/temporary-restore', {
+        method: 'POST',
+        body: { interface: iface }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {}
+  }
+
+  async function setInterfaceState(iface, state) {
+    RPi.confirmAction(`Interface ${state.toUpperCase()}`, `Are you sure you want to turn ${iface} ${state}?`, async () => {
+      try {
+        const res = await RPi.fetchApi('/api/network/interface/state', {
+          method: 'POST',
+          body: { interface: iface, state }
+        });
+        RPi.showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 1000);
+      } catch (e) {}
+    });
+  }
+
+  async function renewDhcp(iface) {
+    RPi.showToast(`Requesting DHCP lease on ${iface}...`, 'info');
+    try {
+      const res = await RPi.fetchApi('/api/network/interface/renew', {
+        method: 'POST',
+        body: { interface: iface }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {}
+  }
+</script>
+{% endblock %}

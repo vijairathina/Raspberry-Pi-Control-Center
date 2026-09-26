@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}System Dashboard{% endblock %}
+
+{% block content %}
+<!-- Top Alerts Banner Area -->
+<div id="alerts-container" style="margin-bottom: 1.5rem;">
+  <!-- Injected dynamically via polling -->
+</div>
+
+<!-- Primary Health & Quick Metrics Grid -->
+<div class="dashboard-grid">
+  <!-- CPU Load -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">CPU Load</span>
+      <span id="badge-cpu" class="badge-status badge-normal">Healthy</span>
+    </div>
+    <div class="card-value" id="val-cpu">{{ summary.quick_metrics.cpu_percent }}%</div>
+    <div class="card-meta" id="val-cpu-cores">Active cores: {{ summary.health.throttling.available or '4 Cores' }}</div>
+    <div class="progress-bar-container">
+      <div id="prog-cpu" class="progress-bar-fill fill-normal" style="width: {{ summary.quick_metrics.cpu_percent }}%;"></div>
+    </div>
+  </div>
+
+  <!-- CPU Temperature -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">CPU Temperature</span>
+      <span id="badge-temp" class="badge-status {% if summary.health.temp_celsius > 75 %}badge-critical{% elif summary.health.temp_celsius > 65 %}badge-warning{% else %}badge-normal{% endif %}">
+        {{ summary.health.overall_state|capitalize }}
+      </span>
+    </div>
+    <div class="card-value" id="val-temp">{{ summary.health.temp_celsius }}°C</div>
+    <div class="card-meta">Optimal ceiling: 70°C</div>
+    <div class="progress-bar-container">
+      <div id="prog-temp" class="progress-bar-fill {% if summary.health.temp_celsius > 75 %}fill-critical{% elif summary.health.temp_celsius > 65 %}fill-warning{% else %}fill-normal{% endif %}" style="width: {{ (summary.health.temp_celsius / 85.0 * 100)|int }}%;"></div>
+    </div>
+  </div>
+
+  <!-- RAM Usage -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Memory (RAM)</span>
+      <span id="badge-ram" class="badge-status badge-normal">Active</span>
+    </div>
+    <div class="card-value" id="val-ram">{{ summary.quick_metrics.ram_percent }}%</div>
+    <div class="card-meta" id="val-ram-meta">{{ summary.quick_metrics.ram_used_mb }} MB / {{ summary.quick_metrics.ram_total_mb }} MB</div>
+    <div class="progress-bar-container">
+      <div id="prog-ram" class="progress-bar-fill fill-normal" style="width: {{ summary.quick_metrics.ram_percent }}%;"></div>
+    </div>
+  </div>
+
+  <!-- Storage Usage -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Root Storage</span>
+      <span id="badge-disk" class="badge-status badge-normal">Normal</span>
+    </div>
+    <div class="card-value" id="val-disk">{{ summary.quick_metrics.disk_percent }}%</div>
+    <div class="card-meta">Mounted on root /</div>
+    <div class="progress-bar-container">
+      <div id="prog-disk" class="progress-bar-fill fill-normal" style="width: {{ summary.quick_metrics.disk_percent }}%;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Two-Column Layout: System Specs & Hardware Health Breakdown -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+  <!-- System Specification Card -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-info-circle"></i> System Specifications</h4>
+      <span class="badge-status badge-info">Online</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0.85rem; font-size: 0.85rem; margin-top: 1rem;">
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <span style="color: var(--text-secondary);">Hostname:</span>
+        <strong style="color: var(--text-primary);" id="sys-hostname">{{ summary.hostname }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <span style="color: var(--text-secondary);">Board Model:</span>
+        <strong style="color: var(--text-primary);" id="sys-model">{{ summary.model }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <span style="color: var(--text-secondary);">Operating System:</span>
+        <strong style="color: var(--text-primary);">{{ summary.os }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <span style="color: var(--text-secondary);">Linux Kernel:</span>
+        <strong style="color: var(--text-primary);">{{ summary.kernel }} ({{ summary.architecture }})</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <span style="color: var(--text-secondary);">Primary IP Address:</span>
+        <strong style="color: var(--status-info);" id="sys-ip">{{ summary.ip_address }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+        <span style="color: var(--text-secondary);">System Uptime:</span>
+        <strong style="color: var(--text-primary);" id="sys-uptime">{{ summary.uptime }}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: var(--text-secondary);">Current Session User:</span>
+        <strong style="color: var(--text-primary);">{{ summary.current_user }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Board Diagnostics & Telemetry Summary -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-shield-check"></i> Raspberry Pi Health Status</h4>
+      <span id="health-overall-pill" class="badge-status {% if summary.health.overall_state == 'normal' %}badge-normal{% else %}badge-warning{% endif %}">
+        ● {{ summary.health.overall_state|upper }}
+      </span>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;" id="health-items-list">
+      {% for item in summary.health.indicators %}
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.9rem; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color);">
+        <span style="font-size: 0.85rem; color: var(--text-primary);">{{ item.title }}</span>
+        <span class="badge-status badge-{{ item.status }}">{{ item.text }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Power & Throttling Flags -->
+    <div style="margin-top: 1.25rem; padding: 0.85rem; border-radius: 8px; background: rgba(0,0,0,0.2); font-size: 0.8rem; color: var(--text-secondary);">
+      <div style="font-weight: 600; margin-bottom: 0.35rem; color: var(--text-primary);">Hardware Power & Throttle Flags:</div>
+      <div id="throttling-details">
+        {% if summary.health.throttling.undervoltage_now %}
+          <div style="color: var(--status-critical);">● Under-voltage actively detected (Check USB-C power supply)</div>
+        {% else %}
+          <div style="color: var(--status-normal);">● Board voltage nominal</div>
+        {% endif %}
+        
+        {% if summary.health.throttling.throttled_now %}
+          <div style="color: var(--status-critical);">● Thermal throttling active</div>
+        {% else %}
+          <div style="color: var(--status-normal);">● Clock speeds unthrottled</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Radios & Wireless Status Summary -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm"><i class="bi bi-wifi"></i> Wi-Fi Interface</span>
+      <span id="dash-wifi-status" class="badge-status badge-normal">Active</span>
+    </div>
+    <div style="font-size: 1.15rem; font-weight: 600;" id="dash-wifi-ssid">Connecting...</div>
+    <div class="card-meta" id="dash-wifi-meta" style="margin-top: 0.35rem;">Telemetry polling...</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm"><i class="bi bi-bluetooth"></i> Bluetooth Controller</span>
+      <span id="dash-bt-status" class="badge-status badge-normal">Powered</span>
+    </div>
+    <div style="font-size: 1.15rem; font-weight: 600;" id="dash-bt-adapter">hci0</div>
+    <div class="card-meta" id="dash-bt-meta" style="margin-top: 0.35rem;">Telemetry polling...</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm"><i class="bi bi-clock-history"></i> Real-time Clock</span>
+      <span class="badge-status badge-info">NTP Synced</span>
+    </div>
+    <div style="font-size: 1.15rem; font-weight: 600;" id="dash-clock">{{ summary.datetime }}</div>
+    <div class="card-meta">Auto-refreshes every 3 seconds</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function pollDashboard() {
+    try {
+      const res = await RPi.fetchApi('/api/dashboard/summary');
+      if (!res.success) return;
+      const data = res.data;
+      const qm = data.summary.quick_metrics;
+      const h = data.summary.health;
+
+      // Update CPU
+      document.getElementById('val-cpu').textContent = qm.cpu_percent + '%';
+      const progCpu = document.getElementById('prog-cpu');
+      progCpu.style.width = qm.cpu_percent + '%';
+      progCpu.className = `progress-bar-fill fill-${qm.cpu_percent > 85 ? 'critical' : (qm.cpu_percent > 70 ? 'warning' : 'normal')}`;
+      
+      // Update Temp
+      document.getElementById('val-temp').textContent = qm.temp_celsius + '°C';
+      const progTemp = document.getElementById('prog-temp');
+      progTemp.style.width = Math.min(100, (qm.temp_celsius / 85.0 * 100)) + '%';
+      progTemp.className = `progress-bar-fill fill-${qm.temp_celsius > 75 ? 'critical' : (qm.temp_celsius > 65 ? 'warning' : 'normal')}`;
+
+      // Update RAM
+      document.getElementById('val-ram').textContent = qm.ram_percent + '%';
+      document.getElementById('val-ram-meta').textContent = `${qm.ram_used_mb} MB / ${qm.ram_total_mb} MB`;
+      document.getElementById('prog-ram').style.width = qm.ram_percent + '%';
+
+      // Update Storage
+      document.getElementById('val-disk').textContent = qm.disk_percent + '%';
+      document.getElementById('prog-disk').style.width = qm.disk_percent + '%';
+
+      // Update Uptime and Clock
+      document.getElementById('sys-uptime').textContent = data.summary.uptime;
+      document.getElementById('dash-clock').textContent = data.summary.datetime;
+
+      // Update Wi-Fi
+      const wifi = data.wifi;
+      if (wifi.connected && wifi.ssid !== 'Disconnected') {
+        document.getElementById('dash-wifi-status').className = 'badge-status badge-normal';
+        document.getElementById('dash-wifi-status').textContent = 'Connected';
+        document.getElementById('dash-wifi-ssid').textContent = wifi.ssid;
+        document.getElementById('dash-wifi-meta').textContent = `Signal: ${wifi.signal}% | IP: ${wifi.ip_address}`;
+      } else {
+        document.getElementById('dash-wifi-status').className = 'badge-status badge-warning';
+        document.getElementById('dash-wifi-status').textContent = 'Disconnected';
+        document.getElementById('dash-wifi-ssid').textContent = 'No Network';
+        document.getElementById('dash-wifi-meta').textContent = 'Wi-Fi interface standby';
+      }
+
+      // Update Bluetooth
+      const bt = data.bluetooth;
+      if (bt.powered) {
+        document.getElementById('dash-bt-status').className = 'badge-status badge-normal';
+        document.getElementById('dash-bt-status').textContent = 'Powered ON';
+        document.getElementById('dash-bt-adapter').textContent = `${bt.adapter} (${bt.mac})`;
+        document.getElementById('dash-bt-meta').textContent = `${bt.paired_devices.length} paired devices`;
+      } else {
+        document.getElementById('dash-bt-status').className = 'badge-status badge-critical';
+        document.getElementById('dash-bt-status').textContent = 'Powered OFF';
+        document.getElementById('dash-bt-adapter').textContent = bt.adapter;
+        document.getElementById('dash-bt-meta').textContent = 'Adapter disabled';
+      }
+
+      // Update Alerts Area
+      const alertsContainer = document.getElementById('alerts-container');
+      if (data.active_alerts && data.active_alerts.length > 0) {
+        alertsContainer.innerHTML = data.active_alerts.map(a => {
+          const isCrit = a.severity.toLowerCase() === 'critical';
+          const bg = isCrit ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)';
+          const border = isCrit ? 'rgba(239, 68, 68, 0.35)' : 'rgba(245, 158, 11, 0.35)';
+          const text = isCrit ? '#f87171' : '#fbbf24';
+          return `
+            <div style="background:${bg}; border:1px solid ${border}; border-left:4px solid ${text}; color:${text}; padding:0.75rem 1.25rem; border-radius:8px; font-size:0.85rem; margin-bottom:0.65rem; display:flex; align-items:center; justify-content:space-between;">
+              <div><strong><i class="bi bi-exclamation-octagon-fill"></i> [${a.severity.toUpperCase()}] ${a.type}:</strong> ${a.message}</div>
+              <span class="badge-status badge-${a.severity.toLowerCase()}">${a.severity}</span>
+            </div>
+          `;
+        }).join('');
+      } else {
+        alertsContainer.innerHTML = '';
+      }
+
+    } catch (e) {
+      console.error("Dashboard poll failed:", e);
+    }
+  }
+
+  setInterval(pollDashboard, 3000);
+  pollDashboard();
+</script>
+{% endblock %}

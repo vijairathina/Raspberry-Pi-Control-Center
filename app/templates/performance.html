@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Performance - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Real-time Performance & Telemetry{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">System Performance Graphs</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Live sub-second telemetry streams across hardware cores, memory, and network interfaces.</span>
+  </div>
+  <div style="display: flex; align-items: center; gap: 0.5rem;">
+    <span class="badge-status badge-normal" id="perf-poll-indicator">Live (3s Poll)</span>
+  </div>
+</div>
+
+<!-- Real-time Charts Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+  <!-- CPU Chart -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <div>
+        <span class="card-title-sm"><i class="bi bi-cpu"></i> CPU Utilization</span>
+        <div style="font-size: 1.45rem; font-weight: 700; margin-top: 0.2rem;" id="chart-cpu-val">{{ metrics.cpu.overall_percent }}%</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="card-meta">Clock Frequency</span>
+        <div style="font-weight: 600; color: var(--status-info);" id="chart-cpu-freq">{{ metrics.cpu.frequency_mhz }} MHz</div>
+      </div>
+    </div>
+    <div style="height: 220px; position: relative;">
+      <canvas id="chart-cpu"></canvas>
+    </div>
+  </div>
+
+  <!-- RAM Chart -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <div>
+        <span class="card-title-sm"><i class="bi bi-memory"></i> RAM Memory Utilization</span>
+        <div style="font-size: 1.45rem; font-weight: 700; margin-top: 0.2rem;" id="chart-ram-val">{{ metrics.ram.percent }}%</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="card-meta">Used / Total</span>
+        <div style="font-weight: 600; color: var(--text-primary);" id="chart-ram-meta">{{ metrics.ram.used_mb }} / {{ metrics.ram.total_mb }} MB</div>
+      </div>
+    </div>
+    <div style="height: 220px; position: relative;">
+      <canvas id="chart-ram"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Network Speed Chart & Metrics -->
+<div class="rpi-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header-flex">
+    <div>
+      <span class="card-title-sm"><i class="bi bi-arrow-down-up"></i> Network Bandwidth Throughput</span>
+      <div style="font-size: 1.35rem; font-weight: 700; margin-top: 0.2rem;">
+        <span style="color: #38bdf8;">RX: <span id="net-rx-speed">{{ metrics.network.rx_speed_kbps }}</span> KB/s</span> &nbsp;|&nbsp;
+        <span style="color: #a855f7;">TX: <span id="net-tx-speed">{{ metrics.network.tx_speed_kbps }}</span> KB/s</span>
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <span class="card-meta">Total Data Transferred</span>
+      <div style="font-weight: 600; color: var(--text-secondary);" id="net-total-meta">
+        Recv: {{ metrics.network.bytes_recv_mb }} MB | Sent: {{ metrics.network.bytes_sent_mb }} MB
+      </div>
+    </div>
+  </div>
+  <div style="height: 200px; position: relative;">
+    <canvas id="chart-net"></canvas>
+  </div>
+</div>
+
+<!-- Per-Core & Load Averages Table -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem;">
+  <!-- Per Core Usage -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm"><i class="bi bi-grid-fill"></i> Per-Core CPU Breakdown</span>
+      <span class="card-meta">{{ metrics.cpu.core_count }} Physical Cores</span>
+    </div>
+    <div id="core-bars-container" style="display: flex; flex-direction: column; gap: 0.85rem; margin-top: 1rem;">
+      {% for core in metrics.cpu.per_core_percent %}
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
+          <span>Core #{{ loop.index0 }}</span>
+          <strong>{{ core }}%</strong>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill fill-normal" style="width: {{ core }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Load Average & Swap Card -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm"><i class="bi bi-sliders"></i> Kernel Load Average & Swap</span>
+      <span class="badge-status badge-info">Scheduler</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+      <div style="display: flex; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary); font-size: 0.85rem;">Load Avg (1m, 5m, 15m):</span>
+        <strong id="val-load-avg" style="color: var(--text-primary); font-family: monospace;">{{ metrics.cpu.load_avg|join(', ') }}</strong>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary); font-size: 0.85rem;">Swap Memory Usage:</span>
+        <strong id="val-swap-meta" style="color: var(--text-primary);">{{ metrics.ram.swap_used_mb }} MB / {{ metrics.ram.swap_total_mb }} MB ({{ metrics.ram.swap_percent }}%)</strong>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary); font-size: 0.85rem;">RAM Cached / Buffer:</span>
+        <strong id="val-ram-cached" style="color: var(--text-primary);">{{ metrics.ram.cached_mb }} MB</strong>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; padding: 0.75rem; background: rgba(255,255,255,0.02); border-radius: 8px;">
+        <span style="color: var(--text-secondary); font-size: 0.85rem;">Network Packet Drops / Errors:</span>
+        <strong id="val-net-err" style="color: var(--text-primary);">Errors: {{ metrics.network.errin + metrics.network.errout }} | Drops: {{ metrics.network.dropin + metrics.network.dropout }}</strong>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let cpuChart = null;
+  let ramChart = null;
+  let netChart = null;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const initialHist = {{ metrics.history|tojson }};
+    
+    // CPU Line Chart
+    cpuChart = RPiCharts.createLineChart('chart-cpu', 'CPU %', '#e11d48', initialHist.timestamps, initialHist.cpu);
+
+    // RAM Line Chart
+    ramChart = RPiCharts.createLineChart('chart-ram', 'RAM %', '#10b981', initialHist.timestamps, initialHist.ram);
+
+    // Network Dual Chart (RX / TX)
+    netChart = RPiCharts.createDualLineChart('chart-net', 'Download (RX KB/s)', '#38bdf8', 'Upload (TX KB/s)', '#a855f7', initialHist.timestamps, initialHist.net_rx, initialHist.net_tx);
+
+    setInterval(pollPerformance, 3000);
+  });
+
+  async function pollPerformance() {
+    try {
+      const res = await RPi.fetchApi('/api/performance/metrics');
+      if (!res.success) return;
+      const data = res.data;
+
+      // Update Chart Values
+      document.getElementById('chart-cpu-val').textContent = data.cpu.overall_percent + '%';
+      document.getElementById('chart-cpu-freq').textContent = data.cpu.frequency_mhz + ' MHz';
+      document.getElementById('chart-ram-val').textContent = data.ram.percent + '%';
+      document.getElementById('chart-ram-meta').textContent = `${data.ram.used_mb} / ${data.ram.total_mb} MB`;
+
+      // Update Network Values
+      document.getElementById('net-rx-speed').textContent = data.network.rx_speed_kbps;
+      document.getElementById('net-tx-speed').textContent = data.network.tx_speed_kbps;
+      document.getElementById('net-total-meta').textContent = `Recv: ${data.network.bytes_recv_mb} MB | Sent: ${data.network.bytes_sent_mb} MB`;
+
+      // Update Load Avg & Swap
+      document.getElementById('val-load-avg').textContent = data.cpu.load_avg.join(', ');
+      document.getElementById('val-swap-meta').textContent = `${data.ram.swap_used_mb} MB / ${data.ram.swap_total_mb} MB (${data.ram.swap_percent}%)`;
+      document.getElementById('val-ram-cached').textContent = `${data.ram.cached_mb} MB`;
+      document.getElementById('val-net-err').textContent = `Errors: ${data.network.errin + data.network.errout} | Drops: ${data.network.dropin + data.network.dropout}`;
+
+      // Update Per Core Bars
+      const coreContainer = document.getElementById('core-bars-container');
+      if (coreContainer && data.cpu.per_core_percent) {
+        coreContainer.innerHTML = data.cpu.per_core_percent.map((pct, idx) => `
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
+              <span>Core #${idx}</span>
+              <strong>${pct}%</strong>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill fill-${pct > 80 ? 'critical' : (pct > 60 ? 'warning' : 'normal')}" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // Update Charts
+      RPiCharts.updateLineChart(cpuChart, data.history.timestamps, data.history.cpu);
+      RPiCharts.updateLineChart(ramChart, data.history.timestamps, data.history.ram);
+      RPiCharts.updateDualLineChart(netChart, data.history.timestamps, data.history.net_rx, data.history.net_tx);
+
+    } catch (e) {
+      console.error("Perf poll error:", e);
+    }
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}Raspberry Pi Control Center{% endblock %}</title>
+  
+  <!-- Bootstrap Icons & Chart.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="rpi-logo-badge">
+          <i class="bi bi-cpu"></i>
+        </div>
+        <div class="sidebar-brand">
+          RPi Center
+          <small>Control Console</small>
+        </div>
+      </div>
+
+      <div class="nav-section-title">Telemetry & System</div>
+      <ul class="sidebar-nav">
+        <li>
+          <a href="{{ url_for('dashboard.index') }}" class="sidebar-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+            <i class="bi bi-speedometer2"></i>
+            <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('performance.index') }}" class="sidebar-link {% if request.endpoint == 'performance.index' %}active{% endif %}">
+            <i class="bi bi-activity"></i>
+            <span>Performance</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('services.index') }}" class="sidebar-link {% if request.endpoint == 'services.index' %}active{% endif %}">
+            <i class="bi bi-gear-wide-connected"></i>
+            <span>Services</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('services.service_logs') }}" class="sidebar-link {% if request.endpoint == 'services.service_logs' %}active{% endif %}">
+            <i class="bi bi-journal-text"></i>
+            <span>Service Logs</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('processes.index') }}" class="sidebar-link {% if request.endpoint == 'processes.index' %}active{% endif %}">
+            <i class="bi bi-terminal"></i>
+            <span>Processes</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="nav-section-title">Connectivity & Network</div>
+      <ul class="sidebar-nav">
+        <li>
+          <a href="{{ url_for('bluetooth.index') }}" class="sidebar-link {% if request.endpoint == 'bluetooth.index' %}active{% endif %}">
+            <i class="bi bi-bluetooth"></i>
+            <span>Bluetooth</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('wifi.index') }}" class="sidebar-link {% if request.endpoint == 'wifi.index' %}active{% endif %}">
+            <i class="bi bi-wifi"></i>
+            <span>Wi-Fi</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('network.index') }}" class="sidebar-link {% if request.endpoint == 'network.index' %}active{% endif %}">
+            <i class="bi bi-ethernet"></i>
+            <span>Network</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('diagnostics.index') }}" class="sidebar-link {% if request.endpoint == 'diagnostics.index' %}active{% endif %}">
+            <i class="bi bi-wrench-adjustable"></i>
+            <span>Diagnostics</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="nav-section-title">Hardware & Storage</div>
+      <ul class="sidebar-nav">
+        <li>
+          <a href="{{ url_for('storage.index') }}" class="sidebar-link {% if request.endpoint == 'storage.index' %}active{% endif %}">
+            <i class="bi bi-hdd-network"></i>
+            <span>Storage</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('hardware.index') }}" class="sidebar-link {% if request.endpoint == 'hardware.index' %}active{% endif %}">
+            <i class="bi bi-motherboard"></i>
+            <span>Hardware & GPIO</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('docker.index') }}" class="sidebar-link {% if request.endpoint == 'docker.index' %}active{% endif %}">
+            <i class="bi bi-box-seam"></i>
+            <span>Docker</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('tailscale.index') }}" class="sidebar-link {% if request.endpoint == 'tailscale.index' %}active{% endif %}">
+            <i class="bi bi-shield-shaded"></i>
+            <span>Tailscale</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="nav-section-title">Automation & Management</div>
+      <ul class="sidebar-nav">
+        <li>
+          <a href="{{ url_for('tasks.index') }}" class="sidebar-link {% if request.endpoint == 'tasks.index' %}active{% endif %}">
+            <i class="bi bi-calendar-check"></i>
+            <span>Tasks</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('automation.index') }}" class="sidebar-link {% if request.endpoint == 'automation.index' %}active{% endif %}">
+            <i class="bi bi-robot"></i>
+            <span>Automation</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('security.app_logs_view') }}" class="sidebar-link {% if request.endpoint == 'security.app_logs_view' %}active{% endif %}">
+            <i class="bi bi-file-earmark-code"></i>
+            <span>App Logs</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('security.index') }}" class="sidebar-link {% if request.endpoint == 'security.index' %}active{% endif %}">
+            <i class="bi bi-shield-lock"></i>
+            <span>Security & Audit</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('security.settings') }}" class="sidebar-link {% if request.endpoint == 'security.settings' %}active{% endif %}">
+            <i class="bi bi-sliders"></i>
+            <span>Settings</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div>Logged in as: <strong style="color:var(--text-primary);">{{ session.get('username', 'admin') }}</strong></div>
+        <div style="margin-top:0.35rem;">
+          <a href="{{ url_for('auth.logout') }}" style="color:var(--status-critical); text-decoration:none;">
+            <i class="bi bi-box-arrow-right"></i> Sign Out
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-toggle" onclick="RPi.toggleSidebar()">
+            <i class="bi bi-list"></i>
+          </button>
+          <span style="font-weight:600; font-size:1.05rem;">{% block page_title %}Dashboard{% endblock %}</span>
+        </div>
+
+        <div class="topbar-right">
+          <button class="btn-secondary btn-sm" onclick="RPi.toggleTheme()" title="Toggle Dark/Light Mode">
+            <i id="theme-toggle-icon" class="bi bi-moon-stars-fill"></i>
+          </button>
+
+          <button class="btn-secondary btn-sm btn-danger-soft" onclick="confirmReboot()" title="Reboot Raspberry Pi">
+            <i class="bi bi-arrow-clockwise"></i> Reboot
+          </button>
+
+          <button class="btn-secondary btn-sm btn-danger-soft" onclick="confirmShutdown()" title="Shut Down Raspberry Pi">
+            <i class="bi bi-power"></i> Power
+          </button>
+        </div>
+      </header>
+
+      <main class="content-body">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <!-- Global Confirm Modal -->
+  <div id="global-confirm-modal" class="modal-backdrop-custom">
+    <div class="modal-dialog-custom">
+      <h3 id="modal-title" style="margin-top:0; font-size:1.15rem; color:var(--text-primary);">Confirmation</h3>
+      <p id="modal-message" style="color:var(--text-secondary); font-size:0.9rem; line-height:1.5;">Are you sure you want to proceed?</p>
+      <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+        <button class="btn-secondary" onclick="RPi.closeModal()">Cancel</button>
+        <button id="modal-confirm-btn" class="btn-rpi">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+  <script>
+    function confirmReboot() {
+      RPi.confirmAction("Confirm Reboot", "Are you sure you want to reboot the Raspberry Pi? All services will briefly restart.", async () => {
+        try {
+          const res = await RPi.fetchApi("/api/system/reboot", { method: "POST" });
+          RPi.showToast(res.message, "success");
+        } catch (e) {}
+      });
+    }
+
+    function confirmShutdown() {
+      RPi.confirmAction("Confirm Shutdown", "Are you sure you want to power off the Raspberry Pi? Physical power cycling will be required to turn it back on.", async () => {
+        try {
+          const res = await RPi.fetchApi("/api/system/shutdown", { method: "POST" });
+          RPi.showToast(res.message, "warning");
+        } catch (e) {}
+      });
+    }
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

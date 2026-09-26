@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Services - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Linux Systemd Services{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">System Services Management</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Inspect and control background system daemons via systemd. Critical services are protected.</span>
+  </div>
+
+  <div style="display: flex; gap: 0.75rem; align-items: center;">
+    <input type="text" id="service-search-input" class="form-control-rpi" placeholder="Search services..." style="width: 240px;" oninput="filterServices()">
+    <button class="btn-secondary" onclick="reloadServices()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+  </div>
+</div>
+
+<div class="rpi-table-container">
+  <table class="rpi-table" id="services-table">
+    <thead>
+      <tr>
+        <th>Service Unit</th>
+        <th>Description</th>
+        <th>Status</th>
+        <th>Enabled</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="services-tbody">
+      {% for s in services %}
+      <tr data-name="{{ s.name }}" data-desc="{{ s.description }}">
+        <td>
+          <div style="font-weight: 600; color: var(--text-primary);">{{ s.name }}</div>
+          {% if s.is_critical %}
+            <span style="font-size: 0.68rem; color: #f59e0b; background: rgba(245,158,11,0.12); padding: 2px 6px; border-radius: 4px;">Protected</span>
+          {% endif %}
+        </td>
+        <td style="color: var(--text-secondary); max-width: 320px;">{{ s.description }}</td>
+        <td>
+          {% if s.running %}
+            <span class="badge-status badge-normal">Running</span>
+          {% else %}
+            <span class="badge-status badge-critical">Stopped</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if s.enabled %}
+            <span class="badge-status badge-info">Enabled</span>
+          {% else %}
+            <span class="badge-status badge-warning">Disabled</span>
+          {% endif %}
+        </td>
+        <td>
+          <div style="display: flex; gap: 0.4rem;">
+            {% if s.running %}
+              <button class="btn-secondary btn-sm" onclick="controlService('{{ s.name }}', 'restart')"><i class="bi bi-arrow-clockwise"></i></button>
+              <button class="btn-secondary btn-sm btn-danger-soft" onclick="confirmStopService('{{ s.name }}')"><i class="bi bi-stop-fill"></i></button>
+            {% else %}
+              <button class="btn-secondary btn-sm btn-success-soft" onclick="controlService('{{ s.name }}', 'start')"><i class="bi bi-play-fill"></i></button>
+            {% endif %}
+
+            {% if s.enabled %}
+              <button class="btn-secondary btn-sm" title="Disable Auto-start" onclick="controlService('{{ s.name }}', 'disable')"><i class="bi bi-slash-circle"></i></button>
+            {% else %}
+              <button class="btn-secondary btn-sm" title="Enable Auto-start" onclick="controlService('{{ s.name }}', 'enable')"><i class="bi bi-check-circle"></i></button>
+            {% endif %}
+
+            <a href="{{ url_for('services.service_logs') }}?unit={{ s.name }}" class="btn-secondary btn-sm" title="View Journal Logs">
+              <i class="bi bi-terminal"></i>
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function filterServices() {
+    const q = document.getElementById('service-search-input').value.toLowerCase();
+    const rows = document.querySelectorAll('#services-tbody tr');
+    rows.forEach(r => {
+      const name = r.getAttribute('data-name').toLowerCase();
+      const desc = r.getAttribute('data-desc').toLowerCase();
+      r.style.display = (name.includes(q) || desc.includes(q)) ? '' : 'none';
+    });
+  }
+
+  async function controlService(name, action) {
+    try {
+      const res = await RPi.fetchApi('/api/services/control', {
+        method: 'POST',
+        body: { name, action }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(reloadServices, 1000);
+    } catch (e) {}
+  }
+
+  function confirmStopService(name) {
+    RPi.confirmAction("Confirm Service Stop", `Are you sure you want to stop '${name}'? Dependent services may be affected.`, () => {
+      controlService(name, 'stop');
+    });
+  }
+
+  async function reloadServices() {
+    const q = document.getElementById('service-search-input').value;
+    try {
+      const res = await RPi.fetchApi(`/api/services/list?q=${encodeURIComponent(q)}`);
+      if (!res.success) return;
+      const tbody = document.getElementById('services-tbody');
+      tbody.innerHTML = res.data.map(s => `
+        <tr data-name="${s.name}" data-desc="${s.description}">
+          <td>
+            <div style="font-weight: 600; color: var(--text-primary);">${s.name}</div>
+            ${s.is_critical ? '<span style="font-size: 0.68rem; color: #f59e0b; background: rgba(245,158,11,0.12); padding: 2px 6px; border-radius: 4px;">Protected</span>' : ''}
+          </td>
+          <td style="color: var(--text-secondary); max-width: 320px;">${s.description}</td>
+          <td>
+            <span class="badge-status badge-${s.running ? 'normal' : 'critical'}">${s.running ? 'Running' : 'Stopped'}</span>
+          </td>
+          <td>
+            <span class="badge-status badge-${s.enabled ? 'info' : 'warning'}">${s.enabled ? 'Enabled' : 'Disabled'}</span>
+          </td>
+          <td>
+            <div style="display: flex; gap: 0.4rem;">
+              ${s.running ? `
+                <button class="btn-secondary btn-sm" onclick="controlService('${s.name}', 'restart')"><i class="bi bi-arrow-clockwise"></i></button>
+                <button class="btn-secondary btn-sm btn-danger-soft" onclick="confirmStopService('${s.name}')"><i class="bi bi-stop-fill"></i></button>
+              ` : `
+                <button class="btn-secondary btn-sm btn-success-soft" onclick="controlService('${s.name}', 'start')"><i class="bi bi-play-fill"></i></button>
+              `}
+              <button class="btn-secondary btn-sm" onclick="controlService('${s.name}', '${s.enabled ? 'disable' : 'enable'}')">
+                <i class="bi bi-${s.enabled ? 'slash-circle' : 'check-circle'}"></i>
+              </button>
+              <a href="/service-logs?unit=${encodeURIComponent(s.name)}" class="btn-secondary btn-sm"><i class="bi bi-terminal"></i></a>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    } catch (e) {}
+  }
+</script>
+{% endblock %}

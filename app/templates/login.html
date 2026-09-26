@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Raspberry Pi Control Center</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0b0f19 80%);
+    }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--card-radius);
+      padding: 2.25rem;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .login-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .login-brand .rpi-logo-badge {
+      width: 52px;
+      height: 52px;
+      font-size: 1.75rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="rpi-logo-badge">
+        <i class="bi bi-cpu"></i>
+      </div>
+      <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700;">Raspberry Pi Control</h2>
+      <span style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.25rem;">Secure Device Management Console</span>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1.25rem;">
+            <i class="bi bi-exclamation-triangle-fill"></i> {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div style="margin-bottom: 1.25rem;">
+        <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">Username</label>
+        <div style="position: relative;">
+          <input type="text" name="username" class="form-control-rpi" placeholder="admin" required autofocus autocomplete="username" style="padding-left: 2.4rem;">
+          <i class="bi bi-person" style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1.75rem;">
+        <label style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">Password</label>
+        <div style="position: relative;">
+          <input type="password" name="password" class="form-control-rpi" placeholder="••••••••" required autocomplete="current-password" style="padding-left: 2.4rem;">
+          <i class="bi bi-key" style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-rpi" style="width: 100%; justify-content: center; padding: 0.75rem;">
+        <i class="bi bi-box-arrow-in-right"></i> Sign In to Control Center
+      </button>
+    </form>
+
+    <div style="margin-top: 1.75rem; text-align: center; font-size: 0.78rem; color: var(--text-muted);">
+      Default credentials: <code>admin</code> / <code>admin</code> (change in Settings)
+    </div>
+  </div>
+</body>
+</html>

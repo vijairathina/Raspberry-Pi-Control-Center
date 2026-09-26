@@ -1,0 +1,34 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Coverage test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+tests/*.db
+
+# SQLite database & local runtime logs
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.log
+*.log
+
+# Sensitive secrets file (use config.example.yaml as template)
+# Keep config.yaml tracked unless user wants to ignore it; but usually in deployment repos config.example.yaml is tracked.
+# Let's keep config.yaml untracked or ignore private tokens. If users want to ignore config.yaml:
+# config.yaml
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Wi-Fi - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Wi-Fi Network Manager{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Wireless 802.11 Management</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Active wireless telemetry, access point scanning, and NetworkManager priority order.</span>
+  </div>
+
+  <div style="display: flex; gap: 0.75rem;">
+    {% if current.connected and current.ssid != 'Disconnected' %}
+      <button class="btn-secondary btn-danger-soft" onclick="disconnectWifi('{{ current.interface }}')"><i class="bi bi-x-circle"></i> Disconnect</button>
+    {% endif %}
+    <button class="btn-rpi" onclick="scanWifi()"><i class="bi bi-radar"></i> Scan Networks</button>
+  </div>
+</div>
+
+<!-- Active Connection Card -->
+<div class="rpi-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-wifi"></i> Current Wi-Fi Association</h4>
+    <span class="badge-status {% if current.connected and current.ssid != 'Disconnected' %}badge-normal{% else %}badge-critical{% endif %}">
+      {{ 'Connected' if (current.connected and current.ssid != 'Disconnected') else 'Offline' }}
+    </span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; font-size: 0.85rem;">
+    <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 8px;">
+      <span style="color: var(--text-secondary); display: block;">Network SSID:</span>
+      <strong style="font-size: 1.1rem; color: var(--text-primary);">{{ current.ssid }}</strong>
+    </div>
+
+    <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 8px;">
+      <span style="color: var(--text-secondary); display: block;">Signal Strength:</span>
+      <strong style="color: var(--status-normal);">{{ current.signal }}%</strong>
+      <div class="progress-bar-container" style="height: 4px; margin-top: 6px;">
+        <div class="progress-bar-fill fill-normal" style="width: {{ current.signal }}%;"></div>
+      </div>
+    </div>
+
+    <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 8px;">
+      <span style="color: var(--text-secondary); display: block;">Channel & Frequency:</span>
+      <strong style="color: var(--text-primary);">Ch {{ current.channel }} ({{ current.frequency }})</strong>
+    </div>
+
+    <div style="background: rgba(255,255,255,0.02); padding: 0.75rem; border-radius: 8px;">
+      <span style="color: var(--text-secondary); display: block;">IP & Gateway:</span>
+      <strong style="color: var(--status-info);">{{ current.ip_address }}</strong>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">GW: {{ current.gateway }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Scanned Networks Section -->
+<div class="rpi-card" id="scan-networks-card" style="margin-bottom: 1.5rem; display: none;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-reception-4"></i> Available Nearby Wi-Fi Access Points</h4>
+    <button class="btn-secondary btn-sm" onclick="document.getElementById('scan-networks-card').style.display='none'">Close</button>
+  </div>
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>SSID</th>
+          <th>Signal</th>
+          <th>Channel</th>
+          <th>Security</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="scan-wifi-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Saved Wi-Fi Connections & Network Priority Table -->
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <div>
+      <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-sort-numeric-down"></i> Saved Networks & Autoconnect Priority</h4>
+      <span style="font-size: 0.78rem; color: var(--text-muted);">Higher priority numbers connect first in NetworkManager. Adjust order with arrows.</span>
+    </div>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Network Profile</th>
+          <th>Interface</th>
+          <th>Priority Order</th>
+          <th>Autoconnect</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if saved %}
+          {% for n in saved %}
+          <tr>
+            <td><strong>{{ n.name }}</strong></td>
+            <td style="color: var(--text-secondary);">{{ n.device }}</td>
+            <td>
+              <span style="font-weight: 700; color: var(--status-info); margin-right: 0.5rem;">Priority {{ n.priority }}</span>
+              <button class="btn-secondary btn-sm" onclick="changePriority('{{ n.uuid }}', {{ n.priority + 10 }})" title="Increase Priority"><i class="bi bi-arrow-up"></i></button>
+              <button class="btn-secondary btn-sm" onclick="changePriority('{{ n.uuid }}', {{ n.priority - 10 }})" title="Decrease Priority"><i class="bi bi-arrow-down"></i></button>
+            </td>
+            <td>
+              {% if n.autoconnect %}
+                <span class="badge-status badge-normal">Auto</span>
+              {% else %}
+                <span class="badge-status badge-warning">Manual</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn-secondary btn-sm btn-success-soft" onclick="quickConnect('{{ n.name }}')">Connect</button>
+                <button class="btn-secondary btn-sm btn-danger-soft" onclick="forgetNetwork('{{ n.uuid }}', '{{ n.name }}')">Forget</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No saved profiles stored.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Connect Modal -->
+<div id="wifi-connect-modal" class="modal-backdrop-custom">
+  <div class="modal-dialog-custom">
+    <h3 style="margin-top: 0; font-size: 1.15rem;">Connect to Wi-Fi</h3>
+    <p style="color: var(--text-secondary); font-size: 0.88rem;">SSID: <strong id="modal-wifi-ssid" style="color:var(--text-primary);"></strong></p>
+    <div style="margin: 1.25rem 0;">
+      <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Pre-shared Key (Password)</label>
+      <input type="password" id="modal-wifi-password" class="form-control-rpi" placeholder="Enter WPA password (or leave blank if open)">
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn-secondary" onclick="document.getElementById('wifi-connect-modal').classList.remove('active')">Cancel</button>
+      <button class="btn-rpi" id="modal-wifi-submit-btn">Connect Network</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let targetSSID = '';
+
+  async function scanWifi() {
+    RPi.showToast("Scanning Wi-Fi spectrum...", "info");
+    try {
+      const res = await RPi.fetchApi('/api/wifi/scan');
+      if (!res.success) return;
+      const tbody = document.getElementById('scan-wifi-tbody');
+      tbody.innerHTML = res.data.map(n => `
+        <tr>
+          <td><strong>${n.ssid}</strong> ${n.in_use ? '<span class="badge-status badge-normal" style="font-size:0.65rem;">Active</span>' : ''}</td>
+          <td>
+            <span>${n.signal}%</span>
+            <div class="progress-bar-container" style="height: 3px; width: 60px;">
+              <div class="progress-bar-fill fill-normal" style="width: ${n.signal}%;"></div>
+            </div>
+          </td>
+          <td>Ch ${n.channel} (${n.frequency})</td>
+          <td style="color: var(--text-secondary);">${n.security}</td>
+          <td>
+            <button class="btn-rpi btn-sm" onclick="promptConnect('${n.ssid}')"><i class="bi bi-plug"></i> Connect</button>
+          </td>
+        </tr>
+      `).join('');
+      document.getElementById('scan-networks-card').style.display = 'block';
+      RPi.showToast(`Found ${res.data.length} Wi-Fi networks`, 'success');
+    } catch (e) {}
+  }
+
+  function promptConnect(ssid) {
+    targetSSID = ssid;
+    document.getElementById('modal-wifi-ssid').textContent = ssid;
+    document.getElementById('modal-wifi-password').value = '';
+    const modal = document.getElementById('wifi-connect-modal');
+    modal.classList.add('active');
+
+    document.getElementById('modal-wifi-submit-btn').onclick = async () => {
+      const password = document.getElementById('modal-wifi-password').value;
+      modal.classList.remove('active');
+      RPi.showToast(`Connecting to ${targetSSID}...`, "info");
+      try {
+        const res = await RPi.fetchApi('/api/wifi/connect', {
+          method: 'POST',
+          body: { ssid: targetSSID, password }
+        });
+        RPi.showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 2000);
+      } catch (e) {}
+    };
+  }
+
+  async function quickConnect(ssid) {
+    promptConnect(ssid);
+  }
+
+  async function disconnectWifi(iface) {
+    RPi.confirmAction("Disconnect Wi-Fi", `Are you sure you want to disconnect from wireless on ${iface}?`, async () => {
+      try {
+        const res = await RPi.fetchApi('/api/wifi/disconnect', {
+          method: 'POST',
+          body: { interface: iface }
+        });
+        RPi.showToast(res.message, 'warning');
+        setTimeout(() => location.reload(), 1500);
+      } catch (e) {}
+    });
+  }
+
+  async function forgetNetwork(uuid, name) {
+    RPi.confirmAction("Forget Network", `Remove saved Wi-Fi profile '${name}'?`, async () => {
+      try {
+        const res = await RPi.fetchApi('/api/wifi/forget', {
+          method: 'POST',
+          body: { identifier: uuid }
+        });
+        RPi.showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 1000);
+      } catch (e) {}
+    });
+  }
+
+  async function changePriority(uuid, newPriority) {
+    try {
+      const res = await RPi.fetchApi('/api/wifi/priority', {
+        method: 'POST',
+        body: { identifier: uuid, priority: newPriority }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 800);
+    } catch (e) {}
+  }
+</script>
+{% endblock %}

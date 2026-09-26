@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Scheduled Maintenance Tasks{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Cron & Background Task Scheduler</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Schedule regular service restarts, weekly reboots, maintenance routines, and network toggles.</span>
+  </div>
+
+  <div>
+    <button class="btn-rpi" onclick="openAddTaskModal()"><i class="bi bi-plus-circle"></i> Create New Task</button>
+  </div>
+</div>
+
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-clock-history"></i> Configured Scheduled Jobs</h4>
+    <span class="badge-status badge-info">{{ tasks|length }} Tasks</span>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Task Name</th>
+          <th>Action Type</th>
+          <th>Target Parameter</th>
+          <th>Schedule Recurrence</th>
+          <th>Last Execution</th>
+          <th>State</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if tasks %}
+          {% for t in tasks %}
+          <tr>
+            <td><strong>{{ t.name }}</strong></td>
+            <td>
+              <span class="badge-status badge-info" style="font-size: 0.72rem;">{{ t.task_type }}</span>
+            </td>
+            <td style="font-family: monospace;">{{ t.target or '—' }}</td>
+            <td>{{ t.schedule_type|capitalize }} at <strong>{{ t.schedule_value }}</strong></td>
+            <td style="color: var(--text-secondary); font-size: 0.8rem;">
+              {{ t.last_run or 'Never' }}
+              {% if t.last_status %}
+                <div style="font-size: 0.72rem; color: var(--text-muted);">{{ t.last_status }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if t.enabled %}
+                <span class="badge-status badge-normal">Active</span>
+              {% else %}
+                <span class="badge-status badge-warning">Disabled</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display: flex; gap: 0.4rem;">
+                <button class="btn-secondary btn-sm" onclick="toggleTask({{ t.id }}, {{ 'false' if t.enabled else 'true' }})">
+                  {{ 'Disable' if t.enabled else 'Enable' }}
+                </button>
+                <button class="btn-secondary btn-sm btn-danger-soft" onclick="deleteTask({{ t.id }})">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No scheduled tasks found. Click 'Create New Task' above.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Task Modal -->
+<div id="add-task-modal" class="modal-backdrop-custom">
+  <div class="modal-dialog-custom">
+    <h3 style="margin-top: 0; font-size: 1.15rem;">Schedule a Predefined Task</h3>
+    
+    <div style="margin: 1rem 0;">
+      <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Task Label</label>
+      <input type="text" id="task-name-input" class="form-control-rpi" placeholder="e.g. Nightly SSH Restart">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Action Operation</label>
+      <select id="task-type-select" class="form-control-rpi">
+        <option value="restart_service">Restart Service</option>
+        <option value="reboot">Reboot Raspberry Pi</option>
+        <option value="maintenance">Run Maintenance & Package Check</option>
+        <option value="start_service">Start Service</option>
+        <option value="stop_service">Stop Service</option>
+        <option value="bluetooth_toggle">Toggle Bluetooth</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+      <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Target (Unit or Param)</label>
+      <input type="text" id="task-target-input" class="form-control-rpi" placeholder="e.g. bluetooth.service (or leave blank for reboot)">
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+      <div>
+        <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Recurrence</label>
+        <select id="task-schedule-type" class="form-control-rpi">
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Time (HH:MM or Day HH:MM)</label>
+        <input type="text" id="task-schedule-val" class="form-control-rpi" value="02:00" placeholder="02:00 or Sun 04:00">
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn-secondary" onclick="document.getElementById('add-task-modal').classList.remove('active')">Cancel</button>
+      <button class="btn-rpi" onclick="submitAddTask()">Save Task</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function openAddTaskModal() {
+    document.getElementById('add-task-modal').classList.add('active');
+  }
+
+  async function submitAddTask() {
+    const name = document.getElementById('task-name-input').value.trim();
+    const task_type = document.getElementById('task-type-select').value;
+    const target = document.getElementById('task-target-input').value.trim();
+    const schedule_type = document.getElementById('task-schedule-type').value;
+    const schedule_value = document.getElementById('task-schedule-val').value.trim();
+
+    if (!name) {
+      RPi.showToast("Task name is required", "error");
+      return;
+    }
+
+    try {
+      const res = await RPi.fetchApi('/api/tasks/add', {
+        method: 'POST',
+        body: { name, task_type, target, schedule_type, schedule_value }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {}
+  }
+
+  async function toggleTask(id, enabled) {
+    try {
+      const res = await RPi.fetchApi('/api/tasks/toggle', {
+        method: 'POST',
+        body: { id, enabled }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {}
+  }
+
+  async function deleteTask(id) {
+    RPi.confirmAction("Delete Task", "Are you sure you want to remove this scheduled task?", async () => {
+      try {
+        const res = await RPi.fetchApi('/api/tasks/delete', {
+          method: 'POST',
+          body: { id }
+        });
+        RPi.showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 600);
+      } catch (e) {}
+    });
+  }
+</script>
+{% endblock %}

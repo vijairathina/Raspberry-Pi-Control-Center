@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Application Settings & Configuration Backup{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Global Parameters & System Updates</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Fine-tune alert trigger thresholds, polling intervals, inspect apt updates, and export JSON config backups.</span>
+  </div>
+</div>
+
+<!-- Two-Column Layout: Parameter Settings & System Updates / Backup -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.5rem;">
+  <!-- Alert Thresholds Form -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-sliders"></i> Sensor & Alert Thresholds</h4>
+    </div>
+
+    <form id="settings-form" onsubmit="saveSettings(event)" style="margin-top: 1rem;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Polling Interval (Seconds)</label>
+          <input type="number" name="polling_interval_seconds" class="form-control-rpi" value="{{ settings.get('polling_interval_seconds', '3') }}">
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Default Interface Theme</label>
+          <select name="theme" class="form-control-rpi">
+            <option value="dark" {% if settings.get('theme') == 'dark' %}selected{% endif %}>Dark Mode (Default)</option>
+            <option value="light" {% if settings.get('theme') == 'light' %}selected{% endif %}>Light Mode</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">CPU Warning Limit (%)</label>
+          <input type="number" name="cpu_warning_percent" class="form-control-rpi" value="{{ settings.get('cpu_warning_percent', '85') }}">
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">CPU Critical Limit (%)</label>
+          <input type="number" name="cpu_critical_percent" class="form-control-rpi" value="{{ settings.get('cpu_critical_percent', '95') }}">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">RAM Warning Limit (%)</label>
+          <input type="number" name="ram_warning_percent" class="form-control-rpi" value="{{ settings.get('ram_warning_percent', '85') }}">
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">RAM Critical Limit (%)</label>
+          <input type="number" name="ram_critical_percent" class="form-control-rpi" value="{{ settings.get('ram_critical_percent', '95') }}">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Temp Warning (°C)</label>
+          <input type="number" name="temperature_warning_celsius" class="form-control-rpi" value="{{ settings.get('temperature_warning_celsius', '70') }}">
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Temp Critical (°C)</label>
+          <input type="number" name="temperature_critical_celsius" class="form-control-rpi" value="{{ settings.get('temperature_critical_celsius', '80') }}">
+        </div>
+      </div>
+
+      <button type="submit" class="btn-rpi" style="width: 100%; justify-content: center;">
+        <i class="bi bi-save"></i> Save Settings
+      </button>
+    </form>
+  </div>
+
+  <!-- System Updates & Backup/Restore Card -->
+  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    <!-- System OS Package Updates -->
+    <div class="rpi-card">
+      <div class="card-header-flex">
+        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-arrow-up-circle"></i> Linux OS Package Updates</h4>
+        <span class="badge-status {% if updates.available %}badge-warning{% else %}badge-normal{% endif %}">
+          {{ updates.updates_count }} Packages Available
+        </span>
+      </div>
+
+      <div style="font-size: 0.85rem; margin-top: 0.75rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span style="color: var(--text-secondary);">Last Update Check:</span>
+          <strong>{{ updates.last_check }}</strong>
+        </div>
+      </div>
+
+      {% if updates.packages %}
+      <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.75rem; font-family: monospace; font-size: 0.78rem; color: #38bdf8; max-height: 120px; overflow-y: auto; margin-top: 0.5rem;">
+        {% for p in updates.packages %}
+          <div>• {{ p }}</div>
+        {% endfor %}
+      </div>
+      {% else %}
+        <div style="font-size: 0.85rem; color: var(--status-normal); margin-top: 0.5rem;">
+          ✓ All operating system packages are up to date.
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Home Assistant Integration Card -->
+    <div class="rpi-card">
+      <div class="card-header-flex">
+        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-house-gear"></i> Home Assistant Integration</h4>
+        <span class="badge-status {% if ha_config.get('enabled') %}badge-normal{% else %}badge-warning{% endif %}" id="ha-badge-status">
+          {{ 'Enabled' if ha_config.get('enabled') else 'Disabled' }}
+        </span>
+      </div>
+
+      <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0.5rem 0 0.85rem;">
+        Push Raspberry Pi telemetry, internet connection status, and critical alerts directly to your Home Assistant instance.
+      </p>
+
+      <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+        <div>Base URL: <strong style="color: var(--text-primary);">{{ ha_config.get('base_url', 'http://homeassistant.local:8123') }}</strong></div>
+        <div>Sensor Entity: <code style="color: var(--status-info);">{{ ha_config.get('sensor_entity_id', 'sensor.rpi_internet_status') }}</code></div>
+        <div>Config file: <code>config.yaml [home_assistant]</code></div>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn-rpi btn-sm" onclick="testHaConnection()"><i class="bi bi-plug"></i> Test Connection</button>
+        <button class="btn-secondary btn-sm" onclick="sendHaTestNotification()"><i class="bi bi-bell"></i> Send Test Notification</button>
+      </div>
+    </div>
+
+    <!-- Resilient Internet Periodic Monitor Card -->
+    <div class="rpi-card">
+      <div class="card-header-flex">
+        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-globe"></i> Periodic Internet Monitor & HA Push</h4>
+        <span class="badge-status badge-normal">Active ({{ net_config.get('interval_seconds', 60) }}s)</span>
+      </div>
+
+      <div style="font-size: 0.82rem; color: var(--text-secondary); margin: 0.5rem 0 0.85rem;">
+        <div>Interval: <strong>{{ net_config.get('interval_seconds', 60) }} seconds</strong></div>
+        <div>Ping IPs: <strong>{{ net_config.get('ping_hosts', ['8.8.8.8', '1.1.1.1'])|join(', ') }}</strong></div>
+        <div>Policy: <strong>1 time if response received, retry up to 3 times on timeout</strong></div>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button class="btn-secondary btn-sm btn-success-soft" onclick="checkInternetNow()"><i class="bi bi-broadcast"></i> Check Internet Now</button>
+        <span id="quick-net-result" style="font-size: 0.8rem; font-family: monospace;"></span>
+      </div>
+    </div>
+
+    <!-- Backup & Restore Card -->
+    <div class="rpi-card">
+      <div class="card-header-flex">
+        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-archive"></i> Configuration Backup & Restore</h4>
+      </div>
+      
+      <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0.5rem 0 1rem;">
+        Export application thresholds, scheduled tasks, and automation rules as a JSON archive. Passwords and credentials are never included.
+      </p>
+
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <a href="{{ url_for('security.api_export_settings') }}" class="btn-rpi" style="text-decoration: none;">
+          <i class="bi bi-download"></i> Export JSON Backup
+        </a>
+
+        <label class="btn-secondary" style="margin: 0; cursor: pointer;">
+          <i class="bi bi-upload"></i> Restore from JSON
+          <input type="file" id="backup-file-input" style="display: none;" accept=".json" onchange="uploadBackup(event)">
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function saveSettings(e) {
+    e.preventDefault();
+    const form = document.getElementById('settings-form');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+      const res = await RPi.fetchApi('/api/settings/update', {
+        method: 'POST',
+        body: data
+      });
+      RPi.showToast(res.message, 'success');
+    } catch (err) {}
+  }
+
+  async function uploadBackup(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    RPi.confirmAction("Restore Configuration", `Are you sure you want to restore settings from '${file.name}'?`, async () => {
+      const formData = new FormData();
+      formData.append('backup_file', file);
+      formData.append('csrf_token', RPi.csrfToken);
+
+      try {
+        const res = await fetch('/api/settings/import', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': RPi.csrfToken
+          },
+          body: formData
+        });
+        const json = await res.json();
+        if (json.success) {
+          RPi.showToast(json.message, 'success');
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          RPi.showToast(json.message || "Import failed", 'error');
+        }
+      } catch (err) {
+        RPi.showToast("Failed to upload backup: " + err.message, 'error');
+      }
+    });
+  }
+
+  async function testHaConnection() {
+    RPi.showToast("Testing connection to Home Assistant...", "info");
+    try {
+      const res = await RPi.fetchApi('/api/ha/test', { method: 'POST' });
+      if (res.success) {
+        RPi.showToast("Connected to Home Assistant! " + res.message, 'success');
+      } else {
+        RPi.showToast("HA Connection Failed: " + res.message, 'error');
+      }
+    } catch (e) {}
+  }
+
+  async function sendHaTestNotification() {
+    RPi.showToast("Dispatching test notification to Home Assistant...", "info");
+    try {
+      const res = await RPi.fetchApi('/api/ha/send-test', { method: 'POST' });
+      if (res.success) {
+        RPi.showToast(res.message, 'success');
+      } else {
+        RPi.showToast("Failed sending notification: " + res.message, 'error');
+      }
+    } catch (e) {}
+  }
+
+  async function checkInternetNow() {
+    const resSpan = document.getElementById('quick-net-result');
+    resSpan.textContent = "Checking...";
+    try {
+      const res = await RPi.fetchApi('/api/internet/check-now', { method: 'POST' });
+      if (res.success) {
+        const d = res.data;
+        resSpan.innerHTML = `<span style="color:#10b981;">● ONLINE</span> (${d.latency_ms}ms, ${d.attempts} try)`;
+        RPi.showToast(res.message, 'success');
+      } else {
+        resSpan.innerHTML = `<span style="color:#ef4444;">● OFFLINE</span>`;
+        RPi.showToast("Internet check reported offline", 'warning');
+      }
+    } catch (e) {
+      resSpan.textContent = "Error";
+    }
+  }
+</script>
+{% endblock %}

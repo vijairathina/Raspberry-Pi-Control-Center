@@ -1,0 +1,25 @@
+[Unit]
+Description=Raspberry Pi Control Center Web Service
+After=network.target network-online.target systemd-journald.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/raspberry-controller
+Environment="PATH=/opt/raspberry-controller/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/raspberry-controller/venv/bin/python run.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=raspberry-controller
+
+# Hardening options
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

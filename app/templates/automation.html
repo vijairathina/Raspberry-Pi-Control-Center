@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}Automation - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Automation & Alert History{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Reactive Automation Rules (IF / THEN)</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Automatically trigger emergency cooling alerts, service restarts, or network reconnects when telemetry violates limits.</span>
+  </div>
+
+  <div>
+    <button class="btn-rpi" onclick="openAddRuleModal()"><i class="bi bi-lightning-charge"></i> Add Automation Rule</button>
+  </div>
+</div>
+
+<!-- Automation Rules Table -->
+<div class="rpi-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-robot"></i> Active Automation Condition Handlers</h4>
+    <span class="badge-status badge-info">{{ rules|length }} Handlers</span>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Rule Description</th>
+          <th>Condition (IF)</th>
+          <th>Automated Action (THEN)</th>
+          <th>Last Triggered</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if rules %}
+          {% for r in rules %}
+          <tr>
+            <td><strong>{{ r.name }}</strong></td>
+            <td>
+              <code style="color: #38bdf8; background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px;">
+                {{ r.trigger_metric }} {{ r.trigger_operator }} {{ r.trigger_value }}
+              </code>
+            </td>
+            <td>
+              <span class="badge-status badge-info" style="font-size: 0.72rem;">{{ r.action_type }}</span>
+              {% if r.action_target %}<span style="color: var(--text-muted); font-size: 0.8rem;">({{ r.action_target }})</span>{% endif %}
+            </td>
+            <td style="color: var(--text-secondary); font-size: 0.8rem;">{{ r.last_triggered or 'Never' }}</td>
+            <td>
+              {% if r.enabled %}
+                <span class="badge-status badge-normal">Active</span>
+              {% else %}
+                <span class="badge-status badge-warning">Disabled</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display: flex; gap: 0.4rem;">
+                <button class="btn-secondary btn-sm" onclick="toggleRule({{ r.id }}, {{ 'false' if r.enabled else 'true' }})">
+                  {{ 'Disable' if r.enabled else 'Enable' }}
+                </button>
+                <button class="btn-secondary btn-sm btn-danger-soft" onclick="deleteRule({{ r.id }})">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No automation rules configured. Automation is disabled by default for safety.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Alert History Log Table -->
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-bell"></i> System Alert & Trigger History</h4>
+    <span class="badge-status badge-info">{{ alerts|length }} Records</span>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Severity</th>
+          <th>Type / Source</th>
+          <th>Message</th>
+          <th>State</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if alerts %}
+          {% for a in alerts %}
+          <tr>
+            <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">{{ a.timestamp }}</td>
+            <td>
+              <span class="badge-status badge-{{ a.severity|lower }}">{{ a.severity|upper }}</span>
+            </td>
+            <td><strong>{{ a.type }}</strong></td>
+            <td style="color: var(--text-primary);">{{ a.message }}</td>
+            <td>
+              {% if a.resolved %}
+                <span class="badge-status badge-normal" style="font-size: 0.72rem;">Resolved</span>
+              {% else %}
+                <span class="badge-status badge-warning" style="font-size: 0.72rem;">Unresolved</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if not a.resolved %}
+                <button class="btn-secondary btn-sm btn-success-soft" onclick="resolveAlert({{ a.id }})">Dismiss</button>
+              {% else %}
+                <span style="color: var(--text-muted); font-size: 0.78rem;">Archived</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No historical alerts recorded. System is healthy.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Rule Modal -->
+<div id="add-rule-modal" class="modal-backdrop-custom">
+  <div class="modal-dialog-custom">
+    <h3 style="margin-top: 0; font-size: 1.15rem;">Create IF / THEN Automation Rule</h3>
+    
+    <div style="margin: 1rem 0;">
+      <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Rule Name</label>
+      <input type="text" id="rule-name-input" class="form-control-rpi" placeholder="e.g. Overheat Emergency Restart">
+    </div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem;">
+      <div>
+        <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Metric (IF)</label>
+        <select id="rule-metric-select" class="form-control-rpi">
+          <option value="cpu_temp">CPU Temperature (°C)</option>
+          <option value="cpu_percent">Overall CPU (%)</option>
+          <option value="ram_percent">Memory RAM (%)</option>
+          <option value="disk_percent">Root Disk (%)</option>
+          <option value="wifi_disconnected">Wi-Fi Disconnected</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Operator</label>
+        <select id="rule-op-select" class="form-control-rpi">
+          <option value=">">&gt;</option>
+          <option value="<">&lt;</option>
+          <option value="==">==</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Threshold</label>
+        <input type="number" id="rule-val-input" class="form-control-rpi" value="75">
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.25rem;">
+      <div>
+        <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Action (THEN)</label>
+        <select id="rule-action-select" class="form-control-rpi">
+          <option value="create_alert">Generate Alert</option>
+          <option value="restart_service">Restart Service</option>
+          <option value="reconnect_wifi">Reconnect Wi-Fi</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Target Unit / Param</label>
+        <input type="text" id="rule-target-input" class="form-control-rpi" placeholder="e.g. bluetooth.service">
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn-secondary" onclick="document.getElementById('add-rule-modal').classList.remove('active')">Cancel</button>
+      <button class="btn-rpi" onclick="submitAddRule()">Create Rule</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function openAddRuleModal() {
+    document.getElementById('add-rule-modal').classList.add('active');
+  }
+
+  async function submitAddRule() {
+    const name = document.getElementById('rule-name-input').value.trim();
+    const metric = document.getElementById('rule-metric-select').value;
+    const operator = document.getElementById('rule-op-select').value;
+    const value = document.getElementById('rule-val-input').value;
+    const action_type = document.getElementById('rule-action-select').value;
+    const action_target = document.getElementById('rule-target-input').value.trim();
+
+    if (!name) {
+      RPi.showToast("Rule name is required", "error");
+      return;
+    }
+
+    try {
+      const res = await RPi.fetchApi('/api/automation/add', {
+        method: 'POST',
+        body: { name, metric, operator, value, action_type, action_target }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {}
+  }
+
+  async function toggleRule(id, enabled) {
+    try {
+      const res = await RPi.fetchApi('/api/automation/toggle', {
+        method: 'POST',
+        body: { id, enabled }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {}
+  }
+
+  async function deleteRule(id) {
+    RPi.confirmAction("Delete Rule", "Are you sure you want to delete this automation rule?", async () => {
+      try {
+        const res = await RPi.fetchApi('/api/automation/delete', {
+          method: 'POST',
+          body: { id }
+        });
+        RPi.showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 600);
+      } catch (e) {}
+    });
+  }
+
+  async function resolveAlert(id) {
+    try {
+      const res = await RPi.fetchApi('/api/automation/alerts/resolve', {
+        method: 'POST',
+        body: { id }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {}
+  }
+</script>
+{% endblock %}

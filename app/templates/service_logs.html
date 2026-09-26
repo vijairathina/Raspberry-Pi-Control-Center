@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Service Logs - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Systemd Journal Logs{% endblock %}
+
+{% block content %}
+<div class="rpi-card" style="margin-bottom: 1.25rem;">
+  <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 220px;">
+      <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Service Unit Name</label>
+      <input type="text" id="log-unit-input" class="form-control-rpi" value="{{ selected_unit }}" placeholder="ssh.service">
+    </div>
+
+    <div>
+      <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Lines</label>
+      <select id="log-lines-select" class="form-control-rpi" style="width: 120px;">
+        <option value="50">Last 50</option>
+        <option value="100" selected>Last 100</option>
+        <option value="500">Last 500</option>
+      </select>
+    </div>
+
+    <div style="flex: 1; min-width: 180px;">
+      <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Filter / Grep</label>
+      <input type="text" id="log-search-input" class="form-control-rpi" placeholder="Search keywords...">
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.2rem;">
+      <label style="font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+        <input type="checkbox" id="log-error-only"> Error Only
+      </label>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; margin-top: 1.2rem;">
+      <button class="btn-rpi" onclick="fetchLogs()"><i class="bi bi-play-circle"></i> Fetch Logs</button>
+      <button class="btn-secondary" onclick="downloadLogs()"><i class="bi bi-download"></i> Download</button>
+    </div>
+  </div>
+</div>
+
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <div>
+      <span class="card-title-sm"><i class="bi bi-terminal-fill"></i> Journal Output: <span id="current-unit-display" style="color:var(--status-info);">{{ selected_unit }}</span></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <label style="font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+        <input type="checkbox" id="auto-refresh-toggle" onchange="toggleAutoRefresh(this.checked)"> Auto-Refresh (5s)
+      </label>
+      <button class="btn-secondary btn-sm" onclick="clearTerminal()"><i class="bi bi-trash"></i> Clear View</button>
+    </div>
+  </div>
+
+  <div class="terminal-window" id="terminal-view">Loading journal records...</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let autoRefreshTimer = null;
+
+  async function fetchLogs() {
+    const unit = document.getElementById('log-unit-input').value.trim();
+    const lines = document.getElementById('log-lines-select').value;
+    const errorOnly = document.getElementById('log-error-only').checked;
+    const search = document.getElementById('log-search-input').value.trim();
+
+    if (!unit) return;
+    document.getElementById('current-unit-display').textContent = unit;
+
+    const term = document.getElementById('terminal-view');
+    try {
+      const url = `/api/services/logs?unit=${encodeURIComponent(unit)}&lines=${lines}&error_only=${errorOnly}&search=${encodeURIComponent(search)}`;
+      const res = await RPi.fetchApi(url);
+      term.textContent = res.logs || 'No log output returned for unit.';
+      term.scrollTop = term.scrollHeight;
+    } catch (e) {
+      term.textContent = 'Failed to fetch logs: ' + e.message;
+    }
+  }
+
+  function downloadLogs() {
+    const unit = document.getElementById('log-unit-input').value.trim();
+    const lines = document.getElementById('log-lines-select').value;
+    window.location.href = `/api/services/logs/download?unit=${encodeURIComponent(unit)}&lines=${lines}`;
+  }
+
+  function clearTerminal() {
+    document.getElementById('terminal-view').textContent = '';
+  }
+
+  function toggleAutoRefresh(enabled) {
+    if (enabled) {
+      fetchLogs();
+      autoRefreshTimer = setInterval(fetchLogs, 5000);
+      RPi.showToast("Log auto-refresh enabled", "info");
+    } else {
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchLogs();
+  });
+</script>
+{% endblock %}

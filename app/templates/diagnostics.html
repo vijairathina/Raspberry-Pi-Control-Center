@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Diagnostics - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Network Diagnostics & Latency Monitor{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Network Reachability & DNS Diagnostics</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Perform safe ICMP pings, DNS resolving probes, traceroute hops, and track 24h connectivity history.</span>
+  </div>
+
+  <div style="display: flex; gap: 0.5rem;">
+    <button class="btn-rpi" onclick="runConnectivityProbe()"><i class="bi bi-broadcast"></i> Test Connectivity Now</button>
+  </div>
+</div>
+
+<!-- Internet Connectivity Monitor Overview Cards -->
+<div class="dashboard-grid" style="margin-bottom: 1.5rem;">
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Gateway Route</span>
+      <span id="badge-diag-gw" class="badge-status {% if initial_conn.gateway.success %}badge-normal{% else %}badge-critical{% endif %}">
+        {{ 'Online' if initial_conn.gateway.success else 'Unreachable' }}
+      </span>
+    </div>
+    <div class="card-value" id="val-diag-gw-lat">{{ initial_conn.gateway.latency_ms or '--' }} ms</div>
+    <div class="card-meta">{{ initial_conn.gateway.host }}</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">DNS Resolver (1.1.1.1)</span>
+      <span id="badge-diag-dns" class="badge-status {% if initial_conn.dns.success %}badge-normal{% else %}badge-critical{% endif %}">
+        {{ 'Online' if initial_conn.dns.success else 'Unreachable' }}
+      </span>
+    </div>
+    <div class="card-value" id="val-diag-dns-lat">{{ initial_conn.dns.latency_ms or '--' }} ms</div>
+    <div class="card-meta">Cloudflare Public DNS</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Internet (8.8.8.8)</span>
+      <span id="badge-diag-inet" class="badge-status {% if initial_conn.internet.success %}badge-normal{% else %}badge-critical{% endif %}">
+        {{ 'Online' if initial_conn.internet.success else 'Offline' }}
+      </span>
+    </div>
+    <div class="card-value" id="val-diag-inet-lat">{{ initial_conn.internet.latency_ms or '--' }} ms</div>
+    <div class="card-meta">Global WAN Gateway</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Reliability Index</span>
+      <span class="badge-status badge-normal">Healthy</span>
+    </div>
+    <div class="card-value" id="diag-uptime-pct">{{ stats.uptime_percent }}%</div>
+    <div class="card-meta">Avg latency: {{ stats.avg_latency_ms }} ms</div>
+  </div>
+</div>
+
+<!-- Diagnostics Tools Section (Ping, DNS, Traceroute) -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+  <!-- Custom Ping Probe -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-reception-3"></i> ICMP Ping Tool</h4>
+    </div>
+    <div style="margin: 1rem 0;">
+      <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Target Host / IP</label>
+      <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="ping-target-input" class="form-control-rpi" value="8.8.8.8" placeholder="google.com or 1.1.1.1">
+        <button class="btn-rpi" onclick="runPing()"><i class="bi bi-play"></i> Ping</button>
+      </div>
+    </div>
+    <div id="ping-result-box" style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; color: #38bdf8; min-height: 80px;">
+      Ready to test.
+    </div>
+  </div>
+
+  <!-- DNS Lookup Tool -->
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-search"></i> DNS Query Resolver</h4>
+    </div>
+    <div style="margin: 1rem 0;">
+      <label style="display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Domain Name</label>
+      <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="dns-target-input" class="form-control-rpi" value="raspberrypi.com" placeholder="example.com">
+        <button class="btn-rpi" onclick="runDns()"><i class="bi bi-search"></i> Resolve</button>
+      </div>
+    </div>
+    <div id="dns-result-box" style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; color: #38bdf8; min-height: 80px;">
+      Ready to resolve.
+    </div>
+  </div>
+</div>
+
+<!-- Traceroute Hop Inspection -->
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;"><i class="bi bi-signpost-split"></i> Network Traceroute Route Hops</h4>
+  </div>
+  <div style="margin: 1rem 0; display: flex; gap: 0.5rem; max-width: 480px;">
+    <input type="text" id="traceroute-target-input" class="form-control-rpi" value="8.8.8.8" placeholder="Destination hostname or IP">
+    <button class="btn-secondary" onclick="runTraceroute()"><i class="bi bi-play-circle"></i> Trace Route</button>
+  </div>
+  <div class="terminal-window" style="height: 240px;" id="traceroute-terminal">Click 'Trace Route' to trace intermediate routing hops.</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function runConnectivityProbe() {
+    RPi.showToast("Probing Gateway, DNS, and Internet...", "info");
+    try {
+      const res = await RPi.fetchApi('/api/diagnostics/connectivity');
+      if (!res.success) return;
+      const data = res.data;
+
+      document.getElementById('val-diag-gw-lat').textContent = (data.gateway.latency_ms || '--') + ' ms';
+      document.getElementById('badge-diag-gw').className = `badge-status badge-${data.gateway.success ? 'normal' : 'critical'}`;
+      document.getElementById('badge-diag-gw').textContent = data.gateway.success ? 'Online' : 'Unreachable';
+
+      document.getElementById('val-diag-dns-lat').textContent = (data.dns.latency_ms || '--') + ' ms';
+      document.getElementById('badge-diag-dns').className = `badge-status badge-${data.dns.success ? 'normal' : 'critical'}`;
+
+      document.getElementById('val-diag-inet-lat').textContent = (data.internet.latency_ms || '--') + ' ms';
+      document.getElementById('badge-diag-inet').className = `badge-status badge-${data.internet.success ? 'normal' : 'critical'}`;
+      document.getElementById('badge-diag-inet').textContent = data.internet.success ? 'Online' : 'Offline';
+
+      RPi.showToast("Connectivity probe complete", "success");
+    } catch (e) {}
+  }
+
+  async function runPing() {
+    const host = document.getElementById('ping-target-input').value.trim();
+    if (!host) return;
+    const box = document.getElementById('ping-result-box');
+    box.textContent = `Pinging ${host}...`;
+    try {
+      const res = await RPi.fetchApi('/api/diagnostics/ping', {
+        method: 'POST',
+        body: { host, count: 2 }
+      });
+      if (res.success) {
+        box.innerHTML = `<span style="color:#22c55e;">✓ Reachable</span>: Latency = <strong>${res.latency_ms} ms</strong> | Packet Loss = 0%`;
+      } else {
+        box.innerHTML = `<span style="color:#ef4444;">✗ Unreachable</span>: ${res.error}`;
+      }
+    } catch (e) {
+      box.textContent = "Error: " + e.message;
+    }
+  }
+
+  async function runDns() {
+    const domain = document.getElementById('dns-target-input').value.trim();
+    if (!domain) return;
+    const box = document.getElementById('dns-result-box');
+    box.textContent = `Resolving ${domain}...`;
+    try {
+      const res = await RPi.fetchApi('/api/diagnostics/dns', {
+        method: 'POST',
+        body: { domain }
+      });
+      if (res.success) {
+        box.innerHTML = `<span style="color:#22c55e;">✓ Resolved</span> (${res.response_time_ms} ms):<br>IPs: <strong>${res.ips.join(', ')}</strong>`;
+      } else {
+        box.innerHTML = `<span style="color:#ef4444;">✗ Resolution Failed</span>: ${res.error}`;
+      }
+    } catch (e) {
+      box.textContent = "Error: " + e.message;
+    }
+  }
+
+  async function runTraceroute() {
+    const host = document.getElementById('traceroute-target-input').value.trim();
+    if (!host) return;
+    const term = document.getElementById('traceroute-terminal');
+    term.textContent = `Executing traceroute to ${host} (up to 15 hops)...`;
+    try {
+      const res = await RPi.fetchApi('/api/diagnostics/traceroute', {
+        method: 'POST',
+        body: { host }
+      });
+      term.textContent = res.output || res.error || 'Traceroute complete';
+    } catch (e) {
+      term.textContent = 'Error: ' + e.message;
+    }
+  }
+</script>
+{% endblock %}

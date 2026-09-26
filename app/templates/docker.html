@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Docker - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Docker Container Manager{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Docker Engine Containers</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Inspect active containerized workloads, resource consumption, port bindings, and log buffers.</span>
+  </div>
+
+  <div>
+    <span class="badge-status {% if docker.installed %}badge-normal{% else %}badge-info{% endif %}">
+      {{ 'Docker Daemon Detected' if docker.installed else 'Emulation / Standby Mode' }}
+    </span>
+  </div>
+</div>
+
+<div class="rpi-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-box-seam"></i> Container Workloads</h4>
+    <span class="badge-status badge-info">{{ docker.containers|length }} Containers</span>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Container Name</th>
+          <th>Container ID</th>
+          <th>Image</th>
+          <th>State</th>
+          <th>Port Forwarding</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if docker.containers %}
+          {% for c in docker.containers %}
+          <tr>
+            <td><strong>{{ c.name }}</strong></td>
+            <td style="font-family: monospace; color: var(--status-info);">{{ c.id }}</td>
+            <td style="color: var(--text-secondary); font-size: 0.82rem;">{{ c.image }}</td>
+            <td>
+              {% if c.state == 'running' %}
+                <span class="badge-status badge-normal">{{ c.status }}</span>
+              {% else %}
+                <span class="badge-status badge-critical">{{ c.status }}</span>
+              {% endif %}
+            </td>
+            <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">{{ c.ports or '—' }}</td>
+            <td>
+              <div style="display: flex; gap: 0.4rem;">
+                {% if c.state == 'running' %}
+                  <button class="btn-secondary btn-sm" onclick="controlContainer('{{ c.id }}', 'restart')"><i class="bi bi-arrow-clockwise"></i></button>
+                  <button class="btn-secondary btn-sm btn-danger-soft" onclick="controlContainer('{{ c.id }}', 'stop')"><i class="bi bi-stop-fill"></i></button>
+                {% else %}
+                  <button class="btn-secondary btn-sm btn-success-soft" onclick="controlContainer('{{ c.id }}', 'start')"><i class="bi bi-play-fill"></i></button>
+                {% endif %}
+                <button class="btn-secondary btn-sm" onclick="viewContainerLogs('{{ c.id }}', '{{ c.name }}')"><i class="bi bi-terminal"></i></button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No containers found.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Container Log Viewer Modal -->
+<div id="docker-logs-modal" class="modal-backdrop-custom">
+  <div class="modal-dialog-custom" style="max-width: 720px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="margin: 0; font-size: 1.1rem;"><i class="bi bi-terminal"></i> Container Logs: <span id="modal-container-name" style="color: var(--status-info);"></span></h3>
+      <button class="btn-secondary btn-sm" onclick="document.getElementById('docker-logs-modal').classList.remove('active')">&times;</button>
+    </div>
+    <div class="terminal-window" id="docker-terminal-logs" style="height: 360px;">Fetching logs...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function controlContainer(id, action) {
+    try {
+      const res = await RPi.fetchApi('/api/docker/control', {
+        method: 'POST',
+        body: { id, action }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {}
+  }
+
+  async function viewContainerLogs(id, name) {
+    document.getElementById('modal-container-name').textContent = name;
+    const term = document.getElementById('docker-terminal-logs');
+    term.textContent = "Fetching container log stream...";
+    document.getElementById('docker-logs-modal').classList.add('active');
+
+    try {
+      const res = await RPi.fetchApi(`/api/docker/logs?id=${encodeURIComponent(id)}&lines=100`);
+      term.textContent = res.data || "No logs available.";
+    } catch (e) {
+      term.textContent = "Error fetching logs: " + e.message;
+    }
+  }
+</script>
+{% endblock %}

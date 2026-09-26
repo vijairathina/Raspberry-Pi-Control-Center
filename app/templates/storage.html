@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Storage - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Storage Drives & Filesystems{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Filesystems & Physical Media</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Inspect SD card endurance, attached USB storage, NVMe expansion, and partition health.</span>
+  </div>
+</div>
+
+<!-- Mounted Partitions Grid -->
+<div class="dashboard-grid" style="margin-bottom: 1.5rem;">
+  {% for fs in filesystems %}
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">{{ fs.mount }}</span>
+      <span class="badge-status badge-{{ fs.status }}">
+        {{ fs.status|upper }}
+      </span>
+    </div>
+    <div class="card-value">{{ fs.percent }}%</div>
+    <div class="card-meta">{{ fs.used_gb }} GB used of {{ fs.total_gb }} GB ({{ fs.free_gb }} GB free)</div>
+    
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill fill-{{ fs.status }}" style="width: {{ fs.percent }}%;"></div>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-muted);">
+      <span>Device: {{ fs.device }}</span>
+      <span>Type: {{ fs.fstype }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Physical Storage Drives Table -->
+<div class="rpi-card">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-hdd-fill"></i> Physical Block Devices (SD / USB / NVMe / SSD)</h4>
+    <span class="badge-status badge-info">{{ hardware_disks|length }} Drives</span>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Block Device</th>
+          <th>Model / Identification</th>
+          <th>Media Type</th>
+          <th>Total Capacity</th>
+          <th>Filesystem Format</th>
+          <th>Mount Point</th>
+          <th>SMART / Health</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for disk in hardware_disks %}
+        <tr>
+          <td><strong style="color: var(--status-info);">{{ disk.device }}</strong></td>
+          <td>{{ disk.model }}</td>
+          <td>
+            <span class="badge-status badge-info" style="font-size: 0.72rem;">{{ disk.type }}</span>
+          </td>
+          <td><strong>{{ disk.size_gb }} GB</strong></td>
+          <td style="font-family: monospace;">{{ disk.fstype }}</td>
+          <td style="color: var(--text-secondary);">{{ disk.mountpoint }}</td>
+          <td>
+            <span class="badge-status badge-normal">{{ disk.health }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

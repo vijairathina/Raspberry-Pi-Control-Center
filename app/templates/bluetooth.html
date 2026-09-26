@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Bluetooth - Raspberry Pi Control Center{% endblock %}
+{% block page_title %}Bluetooth Device Manager{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Bluetooth Controller & Peripherals</h3>
+    <span style="color: var(--text-secondary); font-size: 0.85rem;">Manage HCI controller power, discover local BLE/BT devices, pair, and toggle connection.</span>
+  </div>
+
+  <div style="display: flex; gap: 0.75rem;">
+    {% if bt.powered %}
+      <button class="btn-secondary btn-danger-soft" onclick="toggleBluetoothPower(false)"><i class="bi bi-power"></i> Turn Bluetooth OFF</button>
+    {% else %}
+      <button class="btn-rpi" onclick="toggleBluetoothPower(true)"><i class="bi bi-power"></i> Turn Bluetooth ON</button>
+    {% endif %}
+    <button class="btn-secondary" onclick="restartBluetooth()"><i class="bi bi-arrow-repeat"></i> Restart Service</button>
+    <button class="btn-rpi" onclick="scanBluetooth()"><i class="bi bi-search"></i> Scan Nearby Devices</button>
+  </div>
+</div>
+
+<!-- Bluetooth Adapter Status Overview -->
+<div class="dashboard-grid">
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Controller Interface</span>
+      <span class="badge-status {% if bt.powered %}badge-normal{% else %}badge-critical{% endif %}">
+        {{ 'Powered' if bt.powered else 'Disabled' }}
+      </span>
+    </div>
+    <div class="card-value">{{ bt.adapter }}</div>
+    <div class="card-meta">MAC: {{ bt.mac }}</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Pairable Mode</span>
+      <span class="badge-status {% if bt.pairable %}badge-normal{% else %}badge-warning{% endif %}">
+        {{ 'Active' if bt.pairable else 'Inactive' }}
+      </span>
+    </div>
+    <div class="card-value">{{ 'Enabled' if bt.pairable else 'Disabled' }}</div>
+    <div class="card-meta">Accepts incoming pair requests</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Discoverable Mode</span>
+      <span class="badge-status {% if bt.discoverable %}badge-info{% else %}badge-warning{% endif %}">
+        {{ 'Visible' if bt.discoverable else 'Hidden' }}
+      </span>
+    </div>
+    <div class="card-value">{{ 'Visible' if bt.discoverable else 'Hidden' }}</div>
+    <div class="card-meta">Broadcasts friendly BLE beacon</div>
+  </div>
+
+  <div class="rpi-card">
+    <div class="card-header-flex">
+      <span class="card-title-sm">Paired Devices</span>
+      <span class="badge-status badge-info">{{ bt.paired_devices|length }} Devices</span>
+    </div>
+    <div class="card-value">{{ bt.paired_devices|length }}</div>
+    <div class="card-meta">Stored in controller key table</div>
+  </div>
+</div>
+
+<!-- Paired Devices Table -->
+<div class="rpi-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-link-45deg"></i> Paired & Bonded Devices</h4>
+  </div>
+
+  <div class="rpi-table-container" style="border: none;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>MAC Address</th>
+          <th>Connection</th>
+          <th>Trusted</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if bt.paired_devices %}
+          {% for dev in bt.paired_devices %}
+          <tr>
+            <td><strong>{{ dev.name }}</strong></td>
+            <td style="font-family: monospace;">{{ dev.mac }}</td>
+            <td>
+              {% if dev.connected %}
+                <span class="badge-status badge-normal">Connected</span>
+              {% else %}
+                <span class="badge-status badge-warning">Disconnected</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if dev.trusted %}
+                <span class="badge-status badge-info">Trusted</span>
+              {% else %}
+                <span class="badge-status badge-warning">Untrusted</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display: flex; gap: 0.5rem;">
+                {% if dev.connected %}
+                  <button class="btn-secondary btn-sm" onclick="connectDevice('{{ dev.mac }}', false)">Disconnect</button>
+                {% else %}
+                  <button class="btn-secondary btn-sm btn-success-soft" onclick="connectDevice('{{ dev.mac }}', true)">Connect</button>
+                {% endif %}
+                <button class="btn-secondary btn-sm btn-danger-soft" onclick="unpairDevice('{{ dev.mac }}')">Unpair</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No paired devices found. Click 'Scan Nearby Devices' to discover peripherals.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Discovered Devices Section (Hidden by default, reveals on scan) -->
+<div class="rpi-card" id="scan-results-card" style="display: none;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-radar"></i> Discovered Nearby Bluetooth Devices</h4>
+    <button class="btn-secondary btn-sm" onclick="document.getElementById('scan-results-card').style.display='none'">Dismiss</button>
+  </div>
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>MAC Address</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="scan-tbody"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  async function toggleBluetoothPower(enable) {
+    try {
+      const res = await RPi.fetchApi('/api/bluetooth/power', {
+        method: 'POST',
+        body: { enable }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {}
+  }
+
+  async function restartBluetooth() {
+    try {
+      const res = await RPi.fetchApi('/api/bluetooth/restart', { method: 'POST' });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {}
+  }
+
+  async function scanBluetooth() {
+    RPi.showToast("Scanning Bluetooth spectrum (5s)...", "info");
+    try {
+      const res = await RPi.fetchApi('/api/bluetooth/scan');
+      if (!res.success) return;
+      const tbody = document.getElementById('scan-tbody');
+      tbody.innerHTML = res.data.map(d => `
+        <tr>
+          <td><strong>${d.name}</strong></td>
+          <td style="font-family: monospace;">${d.mac}</td>
+          <td>
+            <button class="btn-rpi btn-sm" onclick="pairDevice('${d.mac}')"><i class="bi bi-link"></i> Pair & Trust</button>
+          </td>
+        </tr>
+      `).join('');
+      document.getElementById('scan-results-card').style.display = 'block';
+      RPi.showToast(`Found ${res.data.length} Bluetooth devices`, 'success');
+    } catch (e) {}
+  }
+
+  async function pairDevice(mac) {
+    try {
+      const res = await RPi.fetchApi('/api/bluetooth/pair', {
+        method: 'POST',
+        body: { mac }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {}
+  }
+
+  async function unpairDevice(mac) {
+    RPi.confirmAction("Unpair Device", `Are you sure you want to remove paired device ${mac}?`, async () => {
+      try {
+        const res = await RPi.fetchApi('/api/bluetooth/remove', {
+          method: 'POST',
+          body: { mac }
+        });
+        RPi.showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 1000);
+      } catch (e) {}
+    });
+  }
+
+  async function connectDevice(mac, connect) {
+    try {
+      const res = await RPi.fetchApi('/api/bluetooth/connect', {
+        method: 'POST',
+        body: { mac, connect }
+      });
+      RPi.showToast(res.message, 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch (e) {}
+  }
+</script>
+{% endblock %}
