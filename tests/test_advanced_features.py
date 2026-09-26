@@ -160,4 +160,44 @@ def test_bluetooth_connected_devices(auth_client):
     assert "connected_devices" in bt_data
     assert isinstance(bt_data["connected_devices"], list)
 
+def test_reverse_proxy_and_custom_urls(auth_client):
+    # 1. Fetch initial proxies list
+    res_list = auth_client.get("/api/network/proxies")
+    assert res_list.status_code == 200
+    pdata = res_list.get_json()["data"]
+    assert "routes" in pdata
+    assert "nginx" in pdata
+
+    # 2. Save a new custom URL route for port 5006
+    res_save = auth_client.post("/api/network/proxy/save", json={
+        "port": 5006,
+        "name": "Raspberry Pi Control Center",
+        "custom_path": "/control",
+        "custom_domain": "control.local",
+        "websocket_support": True,
+        "auto_apply": True
+    }, headers={"X-CSRFToken": "test-csrf-token"})
+    assert res_save.status_code == 200
+    assert res_save.get_json()["success"] is True
+
+    # 3. Verify route exists and has path_url
+    res_check = auth_client.get("/api/network/proxies")
+    routes = res_check.get_json()["data"]["routes"]
+    r_5006 = [r for r in routes if r["port"] == 5006]
+    assert len(r_5006) == 1
+    assert r_5006[0]["custom_path"] == "/control"
+    assert "/control" in r_5006[0]["path_url"]
+    assert "control.local" in r_5006[0]["domain_url"]
+
+    # 4. Test Nginx config generation and apply
+    res_apply = auth_client.post("/api/network/proxy/apply", headers={"X-CSRFToken": "test-csrf-token"})
+    assert res_apply.status_code == 200
+    assert res_apply.get_json()["success"] is True
+
+    # 5. Check network page renders with custom URL table
+    res_page = auth_client.get("/network")
+    assert res_page.status_code == 200
+    assert b"Custom URLs &amp; Reverse Proxy" in res_page.data or b"Custom URLs" in res_page.data
+
+
 

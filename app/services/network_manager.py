@@ -257,6 +257,13 @@ class NetworkManager:
         except Exception:
             pass
 
+        proxy_routes_map = {}
+        try:
+            from app.services.proxy_manager import ProxyManager
+            proxy_routes_map = {r["port"]: r for r in ProxyManager.get_routes()}
+        except Exception:
+            pass
+
         seen_keys = set()
         try:
             conns = psutil.net_connections(kind='inet')
@@ -284,7 +291,10 @@ class NetworkManager:
                     # 2. Configured Control Center server port
                     # 3. Known well-known services
                     is_custom = False
-                    if port in aliases and aliases[port]:
+                    if port in proxy_routes_map and proxy_routes_map[port].get("name"):
+                        label = proxy_routes_map[port]["name"]
+                        is_custom = True
+                    elif port in aliases and aliases[port]:
                         label = aliases[port]
                         is_custom = True
                     elif port == server_port:
@@ -308,6 +318,11 @@ class NetworkManager:
                     else:
                         label = ""
 
+                    p_route = proxy_routes_map.get(port, {})
+                    custom_url = p_route.get("primary_url", "")
+                    custom_path = p_route.get("custom_path", "")
+                    custom_domain = p_route.get("custom_domain", "")
+
                     ports.append({
                         "port": port,
                         "protocol": proto,
@@ -315,7 +330,10 @@ class NetworkManager:
                         "pid": pid,
                         "address": laddr,
                         "service_label": label,
-                        "is_custom": is_custom
+                        "is_custom": is_custom,
+                        "custom_url": custom_url,
+                        "custom_path": custom_path,
+                        "custom_domain": custom_domain
                     })
         except Exception:
             pass

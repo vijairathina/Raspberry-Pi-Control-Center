@@ -41,12 +41,16 @@ Provides a secure browser-based interface for monitoring telemetry, configuring 
    - Saved Wi-Fi profiles with NetworkManager connection priority order adjustment (`↑` / `↓`).
    - Wi-Fi pre-shared keys are never exposed in API responses or UI.
 
-7. **Network Interfaces, Port Aliases & Safe Temporary Block:**
+7. **Network Interfaces, Custom URLs & Reverse Proxy:**
    - Interface controls: `eth0`, `wlan0`, `tailscale0`, `docker0` link up/down and DHCP lease renewal.
+   - **Custom URLs & Automated Reverse Proxy (No :port Required):**
+     - Map friendly custom URLs (e.g. `http://raspberrypi.local/control` or `http://control.local`) directly to local ports (e.g. `5006`) on standard port 80.
+     - Built-in Nginx configuration generator and service reloader (`nginx -t && systemctl reload nginx`).
+     - Supports WebSocket & long-lived streaming connections (vital for live logs, terminals, Home Assistant, Node-RED).
+     - Direct one-click URL launch buttons and status overview in the web interface.
    - **Local Listening Ports & Daemon Aliases:**
      - Dynamic detection of the active Control Center port (e.g. `5006`).
-     - Set custom friendly names and aliases for any listening port (persisted in SQLite).
-     - Intelligent deduplication of duplicate sockets and processes.
+     - Persistent friendly port naming in SQLite with socket deduplication.
    - **Fail-safe Temporary Network Block:**
      - Checks if current browser connection is routed through target interface and issues lockout warning.
      - Automatically schedules an independent restoration task **BEFORE** disabling the interface (survives Flask restart).

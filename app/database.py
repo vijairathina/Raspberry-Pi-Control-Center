@@ -109,6 +109,19 @@ def init_db():
             );
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS reverse_proxy_routes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                port INTEGER NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                custom_path TEXT,
+                custom_domain TEXT,
+                websocket_support INTEGER DEFAULT 1,
+                enabled INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
         # Seed default admin user if not exists
         admin_user = config["defaults"].get("admin_username", "admin")
         default_pw = config["defaults"].get("admin_default_password", "admin")
@@ -120,3 +133,11 @@ def init_db():
         # Seed default settings if not exists
         for k, v in config["defaults"].items():
             conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, str(v)))
+
+        # Seed default reverse proxy route for Control Center
+        server_port = int(config.get("server", {}).get("port", 5006))
+        conn.execute("""
+            INSERT OR IGNORE INTO reverse_proxy_routes (port, name, custom_path, custom_domain, websocket_support, enabled)
+            VALUES (?, ?, ?, ?, ?, 1)
+        """, (server_port, "Raspberry Pi Control Center", "/control", "control.local", 1))
+
