@@ -97,7 +97,13 @@ const RPi = {
 
   toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
-    if (sidebar) sidebar.classList.toggle('open');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (sidebar) {
+      const isOpen = sidebar.classList.toggle('open');
+      if (backdrop) {
+        backdrop.classList.toggle('active', isOpen);
+      }
+    }
   }
 };
 

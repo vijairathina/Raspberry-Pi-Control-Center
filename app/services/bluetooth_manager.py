@@ -14,12 +14,38 @@ _mock_bt_state = {
     "adapter": "hci0",
     "mac": "B8:27:EB:12:34:56",
     "paired_devices": [
-        {"name": "Wireless Keyboard", "mac": "E4:58:B8:A1:02:11", "connected": True, "trusted": True},
-        {"name": "Pixel 8 Pro", "mac": "9C:28:B3:77:43:89", "connected": False, "trusted": True}
+        {
+            "name": "BLE Temp & Humidity Sensor",
+            "mac": "A4:C1:38:99:12:34",
+            "device_type": "BLE",
+            "connected": True,
+            "trusted": True,
+            "rssi": -62,
+            "battery": 88
+        },
+        {
+            "name": "Wireless Mechanical Keyboard",
+            "mac": "E4:58:B8:A1:02:11",
+            "device_type": "Classic BT",
+            "connected": True,
+            "trusted": True,
+            "rssi": -48,
+            "battery": 75
+        },
+        {
+            "name": "Pixel 8 Pro",
+            "mac": "9C:28:B3:77:43:89",
+            "device_type": "Classic BT",
+            "connected": False,
+            "trusted": True,
+            "rssi": None,
+            "battery": None
+        }
     ],
     "discovered_devices": [
-        {"name": "BLE Temp Sensor", "mac": "A4:C1:38:99:12:34", "connected": False, "trusted": False},
-        {"name": "Smart Speaker", "mac": "FC:58:FA:44:21:00", "connected": False, "trusted": False}
+        {"name": "BLE Smart Fitness Band", "mac": "D8:52:19:44:88:AA", "device_type": "BLE", "connected": False, "trusted": False, "rssi": -71},
+        {"name": "Sony WH-1000XM4 Audio", "mac": "FC:58:FA:44:21:00", "device_type": "Classic BT", "connected": False, "trusted": False, "rssi": -55},
+        {"name": "BLE Beacon Node 04", "mac": "E0:4F:43:11:22:33", "device_type": "BLE", "connected": False, "trusted": False, "rssi": -80}
     ]
 }
 
@@ -48,6 +74,8 @@ class BluetoothManager:
                         adapter_name = line.split("Name:", 1)[1].strip()
 
                 devices = BluetoothManager.get_paired_devices_real()
+                connected_devices = [d for d in devices if d.get("connected")]
+
                 return {
                     "available": True,
                     "powered": powered,
@@ -55,12 +83,15 @@ class BluetoothManager:
                     "pairable": pairable,
                     "adapter": adapter_name,
                     "mac": mac_addr,
+                    "connected_devices": connected_devices,
                     "paired_devices": devices
                 }
             except Exception:
                 pass
 
         # Fallback Mock status
+        all_paired = _mock_bt_state["paired_devices"]
+        connected = [d for d in all_paired if d.get("connected")]
         return {
             "available": True,
             "powered": _mock_bt_state["powered"],
@@ -68,7 +99,8 @@ class BluetoothManager:
             "pairable": _mock_bt_state["pairable"],
             "adapter": _mock_bt_state["adapter"],
             "mac": _mock_bt_state["mac"],
-            "paired_devices": _mock_bt_state["paired_devices"]
+            "connected_devices": connected,
+            "paired_devices": all_paired
         }
 
     @staticmethod
@@ -79,20 +111,44 @@ class BluetoothManager:
         try:
             res = subprocess.run(["bluetoothctl", "paired-devices"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
             for line in res.stdout.splitlines():
-                # Device AA:BB:CC:DD:EE:FF Name
                 parts = line.split(None, 2)
                 if len(parts) >= 3 and parts[0] == "Device":
                     mac = parts[1]
                     name = parts[2]
-                    # Check info for connection status
+                    
                     info_res = subprocess.run(["bluetoothctl", "info", mac], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2)
-                    connected = "Connected: yes" in info_res.stdout
-                    trusted = "Trusted: yes" in info_res.stdout
+                    stdout = info_res.stdout
+                    connected = "Connected: yes" in stdout
+                    trusted = "Trusted: yes" in stdout
+                    
+                    # Detect BLE vs Classic BT
+                    # Bluez flags LE devices with AddressType: random, or Service UUIDs, or Class not present
+                    is_le = ("Type: LE" in stdout or "AddressType: random" in stdout or "GATT" in stdout or "0000180f" in stdout.lower())
+                    device_type = "BLE" if is_le else "Classic BT"
+
+                    # Parse RSSI if connected
+                    rssi = None
+                    battery = None
+                    for iline in stdout.splitlines():
+                        if "RSSI:" in iline:
+                            try:
+                                rssi = int(iline.split("RSSI:")[1].strip())
+                            except Exception:
+                                pass
+                        elif "Battery Percentage:" in iline:
+                            try:
+                                battery = int(iline.split("Battery Percentage:")[1].replace("%", "").strip())
+                            except Exception:
+                                pass
+
                     devices.append({
                         "name": name,
                         "mac": mac,
+                        "device_type": device_type,
                         "connected": connected,
-                        "trusted": trusted
+                        "trusted": trusted,
+                        "rssi": rssi,
+                        "battery": battery
                     })
         except Exception:
             pass
@@ -131,9 +187,7 @@ class BluetoothManager:
         duration_seconds = max(3, min(duration_seconds, 15))
         if shutil.which("bluetoothctl"):
             try:
-                # Trigger scan on
                 subprocess.run(["bluetoothctl", "--timeout", str(duration_seconds), "scan", "on"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=duration_seconds + 3)
-                # List discovered
                 res = subprocess.run(["bluetoothctl", "devices"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
                 found = []
                 for line in res.stdout.splitlines():
@@ -141,7 +195,16 @@ class BluetoothManager:
                     if len(parts) >= 3 and parts[0] == "Device":
                         mac = parts[1]
                         name = parts[2]
-                        found.append({"name": name, "mac": mac, "connected": False, "trusted": False})
+                        # Quick check if LE
+                        is_le = "LE" in name.upper() or "BEACON" in name.upper()
+                        found.append({
+                            "name": name,
+                            "mac": mac,
+                            "device_type": "BLE" if is_le else "Classic BT",
+                            "connected": False,
+                            "trusted": False,
+                            "rssi": -65
+                        })
                 return found
             except Exception:
                 pass
@@ -163,11 +226,19 @@ class BluetoothManager:
             except Exception as e:
                 return False, str(e)
 
-        # Mock pair
         dev = next((d for d in _mock_bt_state["discovered_devices"] if d["mac"] == mac), None)
         name = dev["name"] if dev else "Unknown Device"
+        dtype = dev.get("device_type", "BLE" if "BLE" in name else "Classic BT")
         if not any(d["mac"] == mac for d in _mock_bt_state["paired_devices"]):
-            _mock_bt_state["paired_devices"].append({"name": name, "mac": mac, "connected": False, "trusted": True})
+            _mock_bt_state["paired_devices"].append({
+                "name": name,
+                "mac": mac,
+                "device_type": dtype,
+                "connected": False,
+                "trusted": True,
+                "rssi": -60,
+                "battery": None
+            })
         return True, f"Device {mac} paired successfully (Mock)"
 
     @staticmethod
@@ -205,4 +276,6 @@ class BluetoothManager:
         for d in _mock_bt_state["paired_devices"]:
             if d["mac"] == mac:
                 d["connected"] = connect
+                if connect and not d.get("battery"):
+                    d["battery"] = 90
         return True, f"Device {mac} {action}ed (Mock)"

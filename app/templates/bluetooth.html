@@ -66,17 +66,90 @@
   </div>
 </div>
 
-<!-- Paired Devices Table -->
-<div class="rpi-card" style="margin-bottom: 1.5rem;">
+<!-- Actively Connected Bluetooth & BLE Devices Card -->
+<div class="rpi-card" style="margin-bottom: 1.5rem; border: 1px solid rgba(16, 185, 129, 0.3);">
   <div class="card-header-flex">
-    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-link-45deg"></i> Paired & Bonded Devices</h4>
+    <div>
+      <h4 style="margin: 0; font-size: 1rem; color: var(--status-normal);"><i class="bi bi-broadcast-pin"></i> Actively Connected Bluetooth & BLE Devices</h4>
+      <span style="font-size: 0.78rem; color: var(--text-secondary);">Real-time peripheral links over Bluetooth Classic (BR/EDR) and Bluetooth Low Energy (BLE).</span>
+    </div>
+    <span class="badge-status badge-normal">{{ bt.connected_devices|length }} Connected</span>
   </div>
 
-  <div class="rpi-table-container" style="border: none;">
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
     <table class="rpi-table">
       <thead>
         <tr>
           <th>Device Name</th>
+          <th>Protocol</th>
+          <th>MAC Address</th>
+          <th>Signal Strength</th>
+          <th>Battery Level</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if bt.connected_devices %}
+          {% for dev in bt.connected_devices %}
+          <tr>
+            <td>
+              <strong style="color: var(--text-primary);">{{ dev.name }}</strong>
+            </td>
+            <td>
+              {% if dev.device_type == 'BLE' %}
+                <span class="badge-status badge-info" style="font-size: 0.7rem; font-weight: bold;"><i class="bi bi-lightning-charge-fill"></i> BLE</span>
+              {% else %}
+                <span class="badge-status badge-warning" style="font-size: 0.7rem; font-weight: bold;"><i class="bi bi-bluetooth"></i> Classic BT</span>
+              {% endif %}
+            </td>
+            <td style="font-family: monospace; color: var(--status-info);">{{ dev.mac }}</td>
+            <td>
+              {% if dev.rssi %}
+                <span style="font-weight: 600;">{{ dev.rssi }} dBm</span>
+              {% else %}
+                <span style="color: var(--text-muted);">Good</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if dev.battery %}
+                <span style="color: var(--status-normal); font-weight: 600;"><i class="bi bi-battery-charging"></i> {{ dev.battery }}%</span>
+              {% else %}
+                <span style="color: var(--text-muted);"><i class="bi bi-battery"></i> External / N/A</span>
+              {% endif %}
+            </td>
+            <td>
+              <button class="btn-secondary btn-sm btn-danger-soft" onclick="connectDevice('{{ dev.mac }}', false)">
+                <i class="bi bi-x-circle"></i> Disconnect
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+              <i class="bi bi-bluetooth" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+              No active Bluetooth or BLE peripherals currently connected.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Paired & Bonded Devices Table -->
+<div class="rpi-card" style="margin-bottom: 1.5rem;">
+  <div class="card-header-flex">
+    <h4 style="margin: 0; font-size: 1rem;"><i class="bi bi-link-45deg"></i> Paired & Bonded Devices</h4>
+    <span class="badge-status badge-info">{{ bt.paired_devices|length }} Paired</span>
+  </div>
+
+  <div class="rpi-table-container" style="border: none; margin-top: 1rem;">
+    <table class="rpi-table">
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>Protocol</th>
           <th>MAC Address</th>
           <th>Connection</th>
           <th>Trusted</th>
@@ -88,6 +161,13 @@
           {% for dev in bt.paired_devices %}
           <tr>
             <td><strong>{{ dev.name }}</strong></td>
+            <td>
+              {% if dev.device_type == 'BLE' %}
+                <span class="badge-status badge-info" style="font-size: 0.68rem;">BLE</span>
+              {% else %}
+                <span class="badge-status badge-warning" style="font-size: 0.68rem;">Classic</span>
+              {% endif %}
+            </td>
             <td style="font-family: monospace;">{{ dev.mac }}</td>
             <td>
               {% if dev.connected %}
@@ -117,7 +197,7 @@
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No paired devices found. Click 'Scan Nearby Devices' to discover peripherals.</td>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No paired devices found. Click 'Scan Nearby Devices' to discover peripherals.</td>
           </tr>
         {% endif %}
       </tbody>

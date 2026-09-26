@@ -9,6 +9,11 @@
     <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">Filesystems & Physical Media</h3>
     <span style="color: var(--text-secondary); font-size: 0.85rem;">Inspect SD card endurance, attached USB storage, NVMe expansion, and partition health.</span>
   </div>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <button class="btn-rpi" onclick="openCleanStorageModal()" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+      <i class="bi bi-stars"></i> Clean Storage
+    </button>
+  </div>
 </div>
 
 <!-- Mounted Partitions Grid -->
@@ -76,4 +81,135 @@
     </table>
   </div>
 </div>
+
+<!-- Clean Storage Modal -->
+<div id="clean-storage-modal" class="modal-backdrop-custom">
+  <div class="modal-dialog-custom" style="max-width: 520px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+        <i class="bi bi-stars" style="color: var(--status-info);"></i> Storage Cleanup
+      </h3>
+      <button class="btn-secondary btn-sm" onclick="closeCleanStorageModal()" style="border: none; padding: 0.2rem 0.6rem; font-size: 1.1rem; cursor: pointer;">&times;</button>
+    </div>
+    
+    <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 1rem;">
+      Safely reclaim flash drive / SD card storage by removing obsolete caches, vacuuming old system logs, and purging temporary scratch files.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 0.85rem; background: var(--bg-hover); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+      <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; font-size: 0.88rem;">
+        <input type="checkbox" id="clean-target-journal" checked style="margin-top: 0.2rem;">
+        <div>
+          <strong style="color: var(--text-primary);">Systemd Journal Logs Vacuum</strong>
+          <div style="color: var(--text-muted); font-size: 0.78rem;">Purge logs older than 3 days and cap archive to <= 50MB.</div>
+        </div>
+      </label>
+
+      <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; font-size: 0.88rem;">
+        <input type="checkbox" id="clean-target-apt" checked style="margin-top: 0.2rem;">
+        <div>
+          <strong style="color: var(--text-primary);">APT Package Archive Cache</strong>
+          <div style="color: var(--text-muted); font-size: 0.78rem;">Run apt-get clean & autoremove to purge leftover deb packages.</div>
+        </div>
+      </label>
+
+      <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; font-size: 0.88rem;">
+        <input type="checkbox" id="clean-target-tmp" checked style="margin-top: 0.2rem;">
+        <div>
+          <strong style="color: var(--text-primary);">Temporary Scratch Files</strong>
+          <div style="color: var(--text-muted); font-size: 0.78rem;">Delete expired temporary files in /tmp and /var/tmp (> 3 days old).</div>
+        </div>
+      </label>
+
+      <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; font-size: 0.88rem;">
+        <input type="checkbox" id="clean-target-cache" checked style="margin-top: 0.2rem;">
+        <div>
+          <strong style="color: var(--text-primary);">User & Thumbnail Cache</strong>
+          <div style="color: var(--text-muted); font-size: 0.78rem;">Remove cached image thumbnails and expired desktop scratch data.</div>
+        </div>
+      </label>
+    </div>
+
+    <!-- Cleanup Progress / Summary Result Area -->
+    <div id="clean-result-area" style="display: none; margin-bottom: 1rem; padding: 0.85rem; border-radius: 6px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.25);">
+      <div id="clean-result-summary" style="font-weight: 600; color: #22c55e; font-size: 0.9rem; margin-bottom: 0.4rem;"></div>
+      <ul id="clean-result-list" style="margin: 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-secondary);"></ul>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn-secondary" onclick="closeCleanStorageModal()" id="btn-cancel-clean">Cancel</button>
+      <button class="btn-rpi" onclick="runStorageClean()" id="btn-execute-clean" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+        <i class="bi bi-trash3"></i> Clean Now
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openCleanStorageModal() {
+    document.getElementById('clean-result-area').style.display = 'none';
+    document.getElementById('clean-storage-modal').classList.add('active');
+  }
+
+  function closeCleanStorageModal() {
+    document.getElementById('clean-storage-modal').classList.remove('active');
+  }
+
+  async function runStorageClean() {
+    const targets = [];
+    if (document.getElementById('clean-target-journal').checked) targets.push('journal');
+    if (document.getElementById('clean-target-apt').checked) targets.push('apt');
+    if (document.getElementById('clean-target-tmp').checked) targets.push('tmp');
+    if (document.getElementById('clean-target-cache').checked) targets.push('cache');
+
+    if (targets.length === 0) {
+      RPi.showToast("Please select at least one cleanup target.", "warning");
+      return;
+    }
+
+    const execBtn = document.getElementById('btn-execute-clean');
+    const cancelBtn = document.getElementById('btn-cancel-clean');
+    execBtn.disabled = true;
+    cancelBtn.disabled = true;
+    execBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Cleaning...';
+
+    try {
+      const res = await RPi.fetchApi('/api/storage/clean', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets })
+      });
+
+      if (res.success) {
+        RPi.showToast(`Cleaned! Reclaimed ~${res.freed_mb} MB`, "success");
+        const resultArea = document.getElementById('clean-result-area');
+        const summary = document.getElementById('clean-result-summary');
+        const list = document.getElementById('clean-result-list');
+        
+        summary.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${res.message}`;
+        list.innerHTML = (res.operations || []).map(op => `<li>${op}</li>`).join('');
+        resultArea.style.display = 'block';
+
+        // Update button to close
+        execBtn.disabled = false;
+        cancelBtn.disabled = false;
+        execBtn.innerHTML = '<i class="bi bi-check2"></i> Done';
+        execBtn.onclick = () => {
+          closeCleanStorageModal();
+          location.reload();
+        };
+      } else {
+        RPi.showToast(res.message || "Cleanup failed", "error");
+        execBtn.disabled = false;
+        cancelBtn.disabled = false;
+        execBtn.innerHTML = '<i class="bi bi-trash3"></i> Clean Now';
+      }
+    } catch (err) {
+      RPi.showToast(err.message || "Failed to execute cleanup", "error");
+      execBtn.disabled = false;
+      cancelBtn.disabled = false;
+      execBtn.innerHTML = '<i class="bi bi-trash3"></i> Clean Now';
+    }
+  }
+</script>
 {% endblock %}

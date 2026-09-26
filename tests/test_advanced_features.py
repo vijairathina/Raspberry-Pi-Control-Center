@@ -117,3 +117,47 @@ def test_home_assistant_and_internet_monitor(auth_client):
     assert "attempts" in net_data
     assert net_data["attempts"] >= 1
 
+def test_storage_cleanup_and_port_alias(auth_client):
+    # Test Storage Cleanup API
+    res_clean = auth_client.post("/api/storage/clean", json={
+        "targets": ["journal", "apt", "tmp", "cache"]
+    }, headers={"X-CSRFToken": "test-csrf-token"})
+    assert res_clean.status_code == 200
+    clean_data = res_clean.get_json()
+    assert clean_data["success"] is True
+    assert "freed_mb" in clean_data
+    assert len(clean_data["operations"]) > 0
+
+    # Test Port Alias API
+    res_alias = auth_client.post("/api/network/port-alias", json={
+        "port": 5006,
+        "label": "My Custom RPi Console"
+    }, headers={"X-CSRFToken": "test-csrf-token"})
+    assert res_alias.status_code == 200
+    alias_data = res_alias.get_json()
+    assert alias_data["success"] is True
+
+    # Verify alias appears in listening ports endpoint
+    res_ports = auth_client.get("/api/network/ports")
+    assert res_ports.status_code == 200
+    ports = res_ports.get_json()["data"]
+    p_5006 = [p for p in ports if p["port"] == 5006]
+    if p_5006:
+        assert p_5006[0]["service_label"] == "My Custom RPi Console"
+        assert p_5006[0]["is_custom"] is True
+
+    # Test clearing custom port alias
+    res_clear = auth_client.post("/api/network/port-alias", json={
+        "port": 5006,
+        "label": ""
+    }, headers={"X-CSRFToken": "test-csrf-token"})
+    assert res_clear.status_code == 200
+
+def test_bluetooth_connected_devices(auth_client):
+    res_bt = auth_client.get("/api/bluetooth/status")
+    assert res_bt.status_code == 200
+    bt_data = res_bt.get_json()["data"]
+    assert "connected_devices" in bt_data
+    assert isinstance(bt_data["connected_devices"], list)
+
+

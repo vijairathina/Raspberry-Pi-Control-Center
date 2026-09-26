@@ -94,6 +94,7 @@
             <th>Proto</th>
             <th>Service / Process</th>
             <th>Binding Address</th>
+            <th style="text-align: right;">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -102,10 +103,20 @@
             <td style="font-weight: 700; color: var(--status-info);">{{ p.port }}</td>
             <td><span class="badge-status badge-info" style="font-size:0.65rem;">{{ p.protocol }}</span></td>
             <td>
-              <strong>{{ p.service_label or p.process }}</strong>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">PID {{ p.pid }}</div>
+              <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                <strong>{{ p.service_label or p.process }}</strong>
+                {% if p.is_custom %}
+                <span class="badge-status badge-normal" style="font-size: 0.65rem;">Custom Name</span>
+                {% endif %}
+              </div>
+              <div style="font-size: 0.72rem; color: var(--text-muted);">{{ p.process }} (PID {{ p.pid }})</div>
             </td>
             <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">{{ p.address }}</td>
+            <td style="text-align: right;">
+              <button class="btn-secondary btn-sm" onclick="openPortAliasModal({{ p.port }}, '{{ p.service_label|escape }}', '{{ p.process|escape }}')" title="Set Custom Name" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                <i class="bi bi-pencil-square"></i> Name
+              </button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -244,5 +255,71 @@
       setTimeout(() => location.reload(), 1500);
     } catch (e) {}
   }
+
+  let activeAliasPort = 0;
+  function openPortAliasModal(port, currentLabel, proc) {
+    activeAliasPort = port;
+    document.getElementById('alias-modal-port').textContent = port;
+    document.getElementById('alias-modal-proc').textContent = proc || 'Process';
+    document.getElementById('alias-modal-label-input').value = currentLabel || '';
+    document.getElementById('port-alias-modal').classList.add('active');
+    setTimeout(() => {
+      const inp = document.getElementById('alias-modal-label-input');
+      inp.focus();
+      inp.select();
+    }, 100);
+  }
+
+  function closePortAliasModal() {
+    document.getElementById('port-alias-modal').classList.remove('active');
+  }
+
+  async function savePortAlias() {
+    const label = document.getElementById('alias-modal-label-input').value.trim();
+    const btn = document.getElementById('btn-save-port-alias');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+    try {
+      const res = await RPi.fetchApi('/api/network/port-alias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port: activeAliasPort, label: label })
+      });
+      RPi.showToast(res.message || "Port label updated!", "success");
+      closePortAliasModal();
+      setTimeout(() => location.reload(), 600);
+    } catch (e) {
+      RPi.showToast(e.message || "Failed to update label", "error");
+      btn.disabled = false;
+      btn.innerHTML = 'Save Name';
+    }
+  }
 </script>
+
+<!-- Port Alias Modal -->
+<div id="port-alias-modal" class="modal-backdrop-custom">
+  <div class="modal-dialog-custom" style="max-width: 440px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+        <i class="bi bi-tag-fill" style="color: var(--status-info);"></i> Set Port Service Name
+      </h3>
+      <button class="btn-secondary btn-sm" onclick="closePortAliasModal()" style="border: none; padding: 0.2rem 0.6rem; font-size: 1.1rem; cursor: pointer;">&times;</button>
+    </div>
+    
+    <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.4; margin-bottom: 1rem;">
+      Assign a friendly descriptive service name for Port <strong id="alias-modal-port" style="color: var(--status-info);"></strong> (<span id="alias-modal-proc" style="color: var(--text-muted); font-size: 0.82rem;"></span>).
+    </p>
+
+    <div style="margin-bottom: 1.25rem;">
+      <label style="display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text-secondary);">Service Display Label</label>
+      <input type="text" id="alias-modal-label-input" class="form-control-rpi" placeholder="e.g. Raspberry Pi Control Center, Fastify API, etc." maxlength="50">
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Leave empty to clear custom name and restore default service name.</div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+      <button class="btn-secondary" onclick="closePortAliasModal()">Cancel</button>
+      <button class="btn-rpi" onclick="savePortAlias()" id="btn-save-port-alias">Save Name</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

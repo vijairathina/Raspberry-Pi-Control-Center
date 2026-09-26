@@ -6,6 +6,7 @@ Provides a secure browser-based interface for monitoring telemetry, configuring 
 
 ---
 
+ 
 ## 🚀 Key Features
 
 1. **Dashboard & Hardware Telemetry:**
@@ -28,8 +29,9 @@ Provides a secure browser-based interface for monitoring telemetry, configuring 
    - Interactive sorting and instant filtering.
    - Protected PID 1 (init) and control server process; graceful `SIGTERM` or force `SIGKILL`.
 
-5. **Bluetooth Management:**
+5. **Bluetooth & BLE Management:**
    - Adapter state controls (Power ON/OFF, Restart HCI service, Pairable & Discoverable modes).
+   - Dedicated table for **Actively Connected Bluetooth & BLE Devices** with protocol identification badges (`BLE` vs `Classic BT`), RSSI signal strength meters, battery levels, and instant disconnect actions.
    - Scan for nearby Bluetooth / BLE peripherals using `bluetoothctl`.
    - Pair, trust, connect, disconnect, and remove paired devices with strict MAC address validation.
 
@@ -39,30 +41,42 @@ Provides a secure browser-based interface for monitoring telemetry, configuring 
    - Saved Wi-Fi profiles with NetworkManager connection priority order adjustment (`↑` / `↓`).
    - Wi-Fi pre-shared keys are never exposed in API responses or UI.
 
-7. **Network Interfaces & Safe Temporary Block:**
+7. **Network Interfaces, Port Aliases & Safe Temporary Block:**
    - Interface controls: `eth0`, `wlan0`, `tailscale0`, `docker0` link up/down and DHCP lease renewal.
+   - **Local Listening Ports & Daemon Aliases:**
+     - Dynamic detection of the active Control Center port (e.g. `5006`).
+     - Set custom friendly names and aliases for any listening port (persisted in SQLite).
+     - Intelligent deduplication of duplicate sockets and processes.
    - **Fail-safe Temporary Network Block:**
      - Checks if current browser connection is routed through target interface and issues lockout warning.
      - Automatically schedules an independent restoration task **BEFORE** disabling the interface (survives Flask restart).
      - Live countdown with immediate `[Restore Now]` button.
    - Local listening ports viewer and firewall status (`ufw` / `iptables`).
 
-8. **Network Diagnostics:**
+8. **Storage Drives & Safe Disk Cleanup:**
+   - Real-time partition usage and physical block device telemetry (SD cards, USB drives, NVMe).
+   - **Interactive Storage Cleanup:**
+     - Safely vacuum systemd journal logs to <= 50MB.
+     - Clear APT package archives and orphaned deb files (`apt-get clean`).
+     - Purge expired temporary files in `/tmp` and `/var/tmp`.
+     - Remove obsolete user thumbnail caches with reclaimed storage reporting (MB/GB).
+
+9. **Network Diagnostics:**
    - Safe ICMP ping (Gateway, 1.1.1.1, 8.8.8.8, custom host).
    - DNS query resolution benchmark and multi-hop traceroute.
    - 24-hour Internet connectivity reliability and latency tracking.
 
-9. **Hardware, 40-Pin GPIO & Camera:**
-   - Peripheral inventory: USB devices (`lsusb`), PCI devices, serial ports (`/dev/ttyAMA0`), and I2C/SPI buses.
-   - 40-pin GPIO interactive table: configure safe pins as Input/Output and toggle logic states (HIGH/LOW). Power and ground pins are locked.
-   - Camera module auto-detection (`vcgencmd get_camera`, `libcamera`, or V4L2) with live test pattern / frame capture.
+10. **Hardware, 40-Pin GPIO & Camera:**
+    - Peripheral inventory: USB devices (`lsusb`), PCI devices, serial ports (`/dev/ttyAMA0`), and I2C/SPI buses.
+    - 40-pin GPIO interactive table: configure safe pins as Input/Output and toggle logic states (HIGH/LOW). Power and ground pins are locked.
+    - Camera module auto-detection (`vcgencmd get_camera`, `libcamera`, or V4L2) with live test pattern / frame capture.
 
-10. **Automation & Task Scheduler:**
+11. **Automation & Task Scheduler:**
     - Background task scheduler for recurring daily or weekly reboots, service restarts, and maintenance passes.
     - Reactive IF/THEN automation engine: triggers actions (e.g. alert, service restart) based on temperature, CPU, RAM, or Wi-Fi state.
     - Historical alert log with severity tags (`Normal`, `Warning`, `Critical`).
 
-11. **Security & Audit Logs:**
+12. **Security & Audit Logs:**
     - Werkzeug PBKDF2:SHA256 password hashing.
     - Sliding window rate limiting on login (5 attempts per minute per IP).
     - Strict CSRF token validation on all state-modifying requests.

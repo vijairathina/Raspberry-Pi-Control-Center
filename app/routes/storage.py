@@ -1,5 +1,5 @@
-from flask import Blueprint, render_template, jsonify
-from app.auth import login_required, generate_csrf_token
+from flask import Blueprint, render_template, request, jsonify
+from app.auth import login_required, validate_csrf_token, audit_log, generate_csrf_token
 from app.services.storage_manager import StorageManager
 
 storage_bp = Blueprint("storage", __name__)
@@ -25,3 +25,19 @@ def api_filesystems():
 def api_hardware():
     disks = StorageManager.get_disk_hardware_info()
     return jsonify({"success": True, "data": disks})
+
+@storage_bp.route("/api/storage/clean", methods=["POST"])
+@login_required
+def api_clean():
+    if not validate_csrf_token():
+        return jsonify({"success": False, "message": "CSRF validation failed"}), 400
+
+    data = request.get_json(silent=True) or request.form
+    targets = data.get("targets")
+    if not targets:
+        targets = ["journal", "apt", "tmp", "cache"]
+
+    result = StorageManager.clean_storage(targets)
+    audit_log("Storage Cleanup", f"Reclaimed {result.get('freed_mb')} MB ({', '.join(targets)})", success=result.get("success", False))
+    return jsonify(result)
+

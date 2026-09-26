@@ -103,8 +103,29 @@ def api_ports():
     ports = NetworkManager.get_listening_ports()
     return jsonify({"success": True, "data": ports})
 
+@network_bp.route("/api/network/port-alias", methods=["POST"])
+@login_required
+def api_set_port_alias():
+    if not validate_csrf_token():
+        return jsonify({"success": False, "message": "CSRF validation failed"}), 400
+
+    data = request.get_json(silent=True) or request.form
+    try:
+        port = int(data.get("port", 0))
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "Invalid port number"}), 400
+
+    if port <= 0 or port > 65535:
+        return jsonify({"success": False, "message": "Port number must be between 1 and 65535"}), 400
+
+    label = str(data.get("label", "")).strip()
+    success, msg = NetworkManager.set_port_alias(port, label)
+    audit_log("Port Alias Set", f"Port: {port}, Label: '{label}'", success=success)
+    return jsonify({"success": success, "message": msg}), 200 if success else 400
+
 @network_bp.route("/api/network/firewall")
 @login_required
 def api_firewall():
     status = NetworkManager.get_firewall_status()
     return jsonify({"success": True, "data": status})
+

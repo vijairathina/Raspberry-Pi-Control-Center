@@ -208,18 +208,70 @@ class NetworkManager:
         return NetworkManager.set_interface_state(iface, "up")
 
     @staticmethod
+    def get_port_aliases() -> dict[int, str]:
+        """Loads custom user-assigned port labels stored in SQLite."""
+        aliases = {}
+        try:
+            from app.database import get_db
+            conn = get_db()
+            cur = conn.execute("SELECT key, value FROM settings WHERE key LIKE 'port_alias_%'")
+            for row in cur.fetchall():
+                k, v = row["key"], row["value"]
+                port_str = k.replace("port_alias_", "")
+                if port_str.isdigit():
+                    aliases[int(port_str)] = v
+        except Exception:
+            pass
+        return aliases
+
+    @staticmethod
+    def set_port_alias(port: int, label: str) -> tuple[bool, str]:
+        """Sets or deletes a custom user-assigned port label in SQLite."""
+        try:
+            from app.database import get_db
+            conn = get_db()
+            key = f"port_alias_{port}"
+            label = (label or "").strip()
+            with conn:
+                if label:
+                    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, label))
+                else:
+                    conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+            return True, f"Port {port} label set to '{label}'" if label else f"Custom label for port {port} removed"
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
     def get_listening_ports() -> list[dict]:
         """
         Lists local listening TCP/UDP ports using psutil.net_connections.
         Monitoring only, safe and non-intrusive.
+        Supports custom user-defined port aliases and dynamic port detection.
         """
         ports = []
+        aliases = NetworkManager.get_port_aliases()
+        server_port = 5000
+        try:
+            from app.config import config
+            server_port = int(config.get("server", {}).get("port", 5000))
+        except Exception:
+            pass
+
+        seen_keys = set()
         try:
             conns = psutil.net_connections(kind='inet')
             for c in conns:
                 if c.status == psutil.CONN_LISTEN or c.type == socket.SOCK_DGRAM:
                     laddr = f"{c.laddr.ip}:{c.laddr.port}"
                     proto = "TCP" if c.type == socket.SOCK_STREAM else "UDP"
+                    port = c.laddr.port
+                    pid = c.pid or 0
+
+                    dedup_key = (proto, laddr, pid)
+                    if dedup_key in seen_keys:
+                        continue
+                    seen_keys.add(dedup_key)
+
                     proc_name = "Unknown"
                     if c.pid:
                         try:
@@ -227,36 +279,48 @@ class NetworkManager:
                         except Exception:
                             pass
 
-                    # Common friendly service naming
-                    port = c.laddr.port
-                    label = ""
-                    if port == 22:
+                    # Label precedence:
+                    # 1. Custom user-defined alias from DB
+                    # 2. Configured Control Center server port
+                    # 3. Known well-known services
+                    is_custom = False
+                    if port in aliases and aliases[port]:
+                        label = aliases[port]
+                        is_custom = True
+                    elif port == server_port:
+                        label = "Raspberry Pi Control Center"
+                    elif port == 22:
                         label = "SSH"
-                    elif port == 5000:
-                        label = "Raspberry Pi Control Center (Flask)"
                     elif port == 80:
                         label = "HTTP (Web)"
                     elif port == 443:
                         label = "HTTPS (SSL)"
                     elif port == 1883:
                         label = "MQTT Broker"
+                    elif port == 8123:
+                        label = "Home Assistant"
                     elif port == 3000:
                         label = "Grafana"
                     elif port == 53:
                         label = "DNS / Pi-hole"
+                    elif port == 8080:
+                        label = "HTTP-Alt (Web)"
+                    else:
+                        label = ""
 
                     ports.append({
                         "port": port,
                         "protocol": proto,
                         "process": proc_name,
-                        "pid": c.pid or 0,
+                        "pid": pid,
                         "address": laddr,
-                        "service_label": label
+                        "service_label": label,
+                        "is_custom": is_custom
                     })
         except Exception:
             pass
 
-        return sorted(ports, key=lambda x: x["port"])
+        return sorted(ports, key=lambda x: (x["port"], x["protocol"], x["address"]))
 
     @staticmethod
     def get_firewall_status() -> dict:

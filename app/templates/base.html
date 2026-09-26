@@ -161,14 +161,17 @@
       </div>
     </aside>
 
+    <!-- Mobile Sidebar Backdrop -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="RPi.toggleSidebar()"></div>
+
     <!-- Main Wrapper -->
     <div class="main-wrapper">
       <header class="topbar">
         <div class="topbar-left">
-          <button class="mobile-toggle" onclick="RPi.toggleSidebar()">
+          <button class="mobile-toggle" onclick="RPi.toggleSidebar()" aria-label="Toggle navigation menu">
             <i class="bi bi-list"></i>
           </button>
-          <span style="font-weight:600; font-size:1.05rem;">{% block page_title %}Dashboard{% endblock %}</span>
+          <span style="font-weight:600; font-size:1.05rem;" class="page-title-header">{% block page_title %}Dashboard{% endblock %}</span>
         </div>
 
         <div class="topbar-right">
@@ -177,11 +180,11 @@
           </button>
 
           <button class="btn-secondary btn-sm btn-danger-soft" onclick="confirmReboot()" title="Reboot Raspberry Pi">
-            <i class="bi bi-arrow-clockwise"></i> Reboot
+            <i class="bi bi-arrow-clockwise"></i> <span class="nav-text-mobile-hide">Reboot</span>
           </button>
 
           <button class="btn-secondary btn-sm btn-danger-soft" onclick="confirmShutdown()" title="Shut Down Raspberry Pi">
-            <i class="bi bi-power"></i> Power
+            <i class="bi bi-power"></i> <span class="nav-text-mobile-hide">Power</span>
           </button>
         </div>
       </header>
